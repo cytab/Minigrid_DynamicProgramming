@@ -12,7 +12,7 @@ import pygame.freetype
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 
-from minigrid.core.actions import Actions
+from minigrid.core.actions import Actions, ActionsReduced
 from minigrid.core.constants import COLOR_NAMES, DIR_TO_VEC, TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
@@ -45,10 +45,12 @@ class MiniGridEnv(gym.Env):
         highlight: bool = True,
         tile_size: int = TILE_PIXELS,
         agent_pov: bool = False,
+        reduced: bool = False,
     ):
         # Initialize mission
         self.mission = mission_space.sample()
-
+        self.reduced = reduced
+        
         # Can't set both grid_size and width/height
         if grid_size:
             assert width is None and height is None
@@ -57,7 +59,23 @@ class MiniGridEnv(gym.Env):
         assert width is not None and height is not None
 
         # Action enumeration for this environment
-        self.actions = Actions
+        if not reduced:
+            self.actions = Actions
+
+
+            # Actions are discrete integer values
+            self.action_space = spaces.Discrete(len(self.actions))
+            self.actuel_state = "direction"
+            space = spaces.Discrete(4)
+        else :
+            self.actions = ActionsReduced
+            self.size = grid_size
+            self.nS = self.size*self.size
+            # Actions are discrete integer values
+            self.action_space = spaces.Discrete(len(self.actions))
+            self.nA = len(self.actions)
+            self.actuel_state = "pose"
+            space = spaces.Discrete(self.nS)
 
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(self.actions))
@@ -521,7 +539,7 @@ class MiniGridEnv(gym.Env):
         self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         self.step_count += 1
-
+        
         reward = 0
         terminated = False
         truncated = False
@@ -532,18 +550,74 @@ class MiniGridEnv(gym.Env):
         # Get the contents of the cell in front of the agent
         fwd_cell = self.grid.get(*fwd_pos)
 
+
         # Rotate left
         if action == self.actions.left:
-            self.agent_dir -= 1
-            if self.agent_dir < 0:
-                self.agent_dir += 4
+            
+            if self.reduced:
+                self.agent_dir = 2
+                # Get the position in front of the agent
+                fwd_pos = self.front_pos
+
+
+                # Get the contents of the cell in front of the agent
+                fwd_cell = self.grid.get(*fwd_pos)
+                if fwd_cell is None or fwd_cell.can_overlap():
+                    self.agent_pos = tuple(fwd_pos)
+                if fwd_cell is not None and fwd_cell.type == "goal":
+                    terminated = True
+                    reward = self._reward()
+                if fwd_cell is not None and fwd_cell.type == "lava":
+                    terminated = True
+            else :
+                self.agent_dir -= 1
+                if self.agent_dir < 0:
+                    self.agent_dir += 4
 
         # Rotate right
         elif action == self.actions.right:
-            self.agent_dir = (self.agent_dir + 1) % 4
+            if self.reduced:
+                self.agent_dir = 0
+                # Get the position in front of the agent
+                fwd_pos = self.front_pos
+
+                # Get the contents of the cell in front of the agent
+                fwd_cell = self.grid.get(*fwd_pos)
+                if fwd_cell is None or fwd_cell.can_overlap():
+                    self.agent_pos = tuple(fwd_pos)
+                if fwd_cell is not None and fwd_cell.type == "goal":
+                    terminated = True
+                    reward = self._reward()
+                if fwd_cell is not None and fwd_cell.type == "lava":
+                    terminated = True
+            else:
+                self.agent_dir = (self.agent_dir + 1) % 4
 
         # Move forward
         elif action == self.actions.forward:
+            if self.reduced:
+                self.agent_dir = 3
+            # Get the position in front of the agent
+            fwd_pos = self.front_pos
+
+            # Get the contents of the cell in front of the agent
+            fwd_cell = self.grid.get(*fwd_pos)
+            
+            if fwd_cell is None or fwd_cell.can_overlap():
+                self.agent_pos = tuple(fwd_pos)
+            if fwd_cell is not None and fwd_cell.type == "goal":
+                terminated = True
+                reward = self._reward()
+            if fwd_cell is not None and fwd_cell.type == "lava":
+                terminated = True
+        
+        elif self.reduced and action == self.actions.backward:
+            
+            self.agent_dir = 1
+            # Get the position in front of the agent
+            fwd_pos = self.front_pos
+            # Get the contents of the cell in front of the agent
+            fwd_cell = self.grid.get(*fwd_pos)
             if fwd_cell is None or fwd_cell.can_overlap():
                 self.agent_pos = tuple(fwd_pos)
             if fwd_cell is not None and fwd_cell.type == "goal":
@@ -552,32 +626,33 @@ class MiniGridEnv(gym.Env):
             if fwd_cell is not None and fwd_cell.type == "lava":
                 terminated = True
 
-        # Pick up an object
-        elif action == self.actions.pickup:
-            if fwd_cell and fwd_cell.can_pickup():
-                if self.carrying is None:
-                    self.carrying = fwd_cell
-                    self.carrying.cur_pos = np.array([-1, -1])
-                    self.grid.set(fwd_pos[0], fwd_pos[1], None)
+        if not self.reduced:
+            # Pick up an object
+            if action == self.actions.pickup:
+                if fwd_cell and fwd_cell.can_pickup():
+                    if self.carrying is None:
+                        self.carrying = fwd_cell
+                        self.carrying.cur_pos = np.array([-1, -1])
+                        self.grid.set(fwd_pos[0], fwd_pos[1], None)
 
-        # Drop an object
-        elif action == self.actions.drop:
-            if not fwd_cell and self.carrying:
-                self.grid.set(fwd_pos[0], fwd_pos[1], self.carrying)
-                self.carrying.cur_pos = fwd_pos
-                self.carrying = None
+            # Drop an object
+            elif action == self.actions.drop:
+                if not fwd_cell and self.carrying:
+                    self.grid.set(fwd_pos[0], fwd_pos[1], self.carrying)
+                    self.carrying.cur_pos = fwd_pos
+                    self.carrying = None
 
-        # Toggle/activate an object
-        elif action == self.actions.toggle:
-            if fwd_cell:
-                fwd_cell.toggle(self, fwd_pos)
+            # Toggle/activate an object
+            elif action == self.actions.toggle:
+                if fwd_cell:
+                    fwd_cell.toggle(self, fwd_pos)
 
-        # Done action (not used by default)
-        elif action == self.actions.done:
-            pass
+            # Done action (not used by default)
+            elif action == self.actions.done:
+                pass
 
-        else:
-            raise ValueError(f"Unknown action: {action}")
+            else:
+                raise ValueError(f"Unknown action: {action}")
 
         if self.step_count >= self.max_steps:
             truncated = True
@@ -625,6 +700,9 @@ class MiniGridEnv(gym.Env):
             grid.set(*agent_pos, None)
 
         return grid, vis_mask
+    
+    def to_s(self, pose):
+        return pose[0] * self.size + pose[1]
 
     def gen_obs(self):
         """
@@ -640,8 +718,10 @@ class MiniGridEnv(gym.Env):
         # - an image (partially observable view of the environment)
         # - the agent's direction/orientation (acting as a compass)
         # - a textual mission string (instructions for the agent)
-        obs = {"image": image, "direction": self.agent_dir, "mission": self.mission}
-
+        if not self.reduced:
+            obs = {"image": image, self.actuel_state: self.agent_dir, "mission": self.mission}
+        else :
+            obs = {"image": image, self.actuel_state: self.to_s(self.agent_pos), "mission": self.mission}
         return obs
 
     def get_pov_render(self, tile_size):

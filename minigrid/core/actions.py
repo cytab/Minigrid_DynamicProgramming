@@ -18,3 +18,10 @@ class Actions(IntEnum):
 
     # Done completing task
     done = 6
+
+class ActionsReduced(IntEnum):
+    # Turn left, turn right, move forward
+    left = 0
+    right = 1
+    forward = 2
+    backward = 3

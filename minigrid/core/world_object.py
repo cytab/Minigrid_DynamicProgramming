@@ -113,6 +113,9 @@ class Goal(WorldObj):
 
     def can_overlap(self):
         return True
+    
+    def change_color(self, color):
+        self.color = color
 
     def render(self, img):
         fill_coords(img, point_in_rect(0, 1, 0, 1), COLORS[self.color])

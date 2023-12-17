@@ -12,7 +12,7 @@ import pygame.freetype
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 
-from minigrid.core.actions import Actions, ActionsReduced
+from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2
 from minigrid.core.constants import COLOR_NAMES, DIR_TO_VEC, TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
@@ -50,7 +50,6 @@ class MiniGridEnv(gym.Env):
         # Initialize mission
         self.mission = mission_space.sample()
         self.reduced = reduced
-        
         # Can't set both grid_size and width/height
         if grid_size:
             assert width is None and height is None
@@ -96,7 +95,7 @@ class MiniGridEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "image": image_observation_space,
-                "direction": spaces.Discrete(4),
+                "pose": spaces.Discrete(4),
                 "mission": mission_space,
             }
         )
@@ -534,7 +533,8 @@ class MiniGridEnv(gym.Env):
         assert world_cell is not None
 
         return obs_cell is not None and obs_cell.type == world_cell.type
-
+    
+    
     def step(
         self, action: ActType
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
@@ -573,7 +573,21 @@ class MiniGridEnv(gym.Env):
                 self.agent_dir -= 1
                 if self.agent_dir < 0:
                     self.agent_dir += 4
+                    
+        elif self.reduced and action == ActionsReduced.stay:
+            if self.reduced:
 
+                # Get the contents of the cell in front of the agent
+                fwd_cell = self.grid.get(*fwd_pos)
+                if fwd_cell is None or fwd_cell.can_overlap():
+                    self.agent_pos = tuple(fwd_pos)
+                if fwd_cell is not None and fwd_cell.type == "goal":
+                    terminated = True
+                    reward = self._reward()
+                if fwd_cell is not None and fwd_cell.type == "lava":
+                    terminated = True
+            else:
+                pass
         # Rotate right
         elif action == self.actions.right:
             if self.reduced:
@@ -625,6 +639,15 @@ class MiniGridEnv(gym.Env):
                 reward = self._reward()
             if fwd_cell is not None and fwd_cell.type == "lava":
                 terminated = True
+        
+        elif self.reduced and action == ActionsAgent2.nothing:
+            pass
+        elif self.reduced and action == ActionsAgent2.take_key:
+            #set targeted door to change 
+            # for now there is only one door but it will be interesting to 
+            # code interacting closing or opening of door depending of the 
+            # target, so create a function to change target
+            pass
 
         if not self.reduced:
             # Pick up an object

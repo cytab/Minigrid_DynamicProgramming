@@ -2,14 +2,10 @@ from __future__ import annotations
 import numpy as np
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import Goal
+from minigrid.core.world_object import Goal, Door, Key
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.core.actions import Actions, ActionsReduced
+from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2
 from minigrid.core.world_object import Point, WorldObj
-
-
-
-
 
 class EmptyReducedEnv(MiniGridEnv):
     """
@@ -87,6 +83,7 @@ class EmptyReducedEnv(MiniGridEnv):
         agent_start_pos=(1, 1),
         agent_start_dir=0,
         max_steps: int | None = None,
+        door=True,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -99,6 +96,10 @@ class EmptyReducedEnv(MiniGridEnv):
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.i = 0
         self.j = 0
+        self.splitIdx = 0
+        self.doorIdx = 0
+        self.target_door = {}
+        self.door = door
 
 
         if max_steps is None:
@@ -120,76 +121,122 @@ class EmptyReducedEnv(MiniGridEnv):
             for j in range(1, self.size-1):
                 if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
                     break
-                elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
-                    break
+#                elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
+ #                   break
                 else:
                     s.append((i,j))
         return s
     
     def get_all_states(self):
         return self.get_states_non_terminated(all=True)
-
-    def get_possible_move(self, pose=0):
-        if type(pose) == int :
-            i = self.agent_pos[0]
-            j = self.agent_pos[1]
-        else:
-            i = pose[0]
-            j = pose[1]
-            
-        if i == 1:
-            if j== 1:
-                return (ActionsReduced.right, ActionsReduced.backward) 
-            elif j > 1 and j < self.size -2 :
-                return (ActionsReduced.right, ActionsReduced.forward, ActionsReduced.backward)
-            elif j == self.size -2:
-                return (ActionsReduced.right, ActionsReduced.forward)
-        elif  i > 1 and i < self.size -2 :
-            if j == 1:
-                return (ActionsReduced.right, ActionsReduced.backward, ActionsReduced.left) 
-            elif j> 1 and j < self.size -2 :
-                return (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward ,ActionsReduced.backward)
-            elif j == self.size -2:
-                return (ActionsReduced.left, ActionsReduced.forward, ActionsReduced.right)
-        elif i== self.size -2:
-            if j == 1:
-                return (ActionsReduced.left, ActionsReduced.backward)
-            elif j > 1 and j < self.size -2 :
-                return (ActionsReduced.left, ActionsReduced.forward ,ActionsReduced.backward)
-            elif j == self.size -2:
-                return (ActionsReduced.left, ActionsReduced.forward)
     
-    def get_reward(self, i, j, cost_value=0):
+    def obstacle_pos(self, agent_pos):
+        # get if there are obstacle around the agent : up , below, on right, on left
+        #if there is an obstacle (wall, door) then 1 and if not 0:
+        obstacle = [0,0,0,0]
+        i = agent_pos[0]
+        j = agent_pos[1]
+        
+        #check forward future pose
+        cell = []
+        cell.append(self.grid.get(*(i,j-1)))
+        cell.append(self.grid.get(*(i,j+1)))
+        cell.append(self.grid.get(*(i+1,j)))
+        cell.append(self.grid.get(*(i-1,j)))
+        for index, case in enumerate(cell):
+        #check forward future pose
+            if case is not None:
+                if (case.type == "door" and self.target_door[(self.splitIdx, self.doorIdx)]):
+                    obstacle[index] = 1
+                elif case.type == "wall":
+                    obstacle[index] = 1
+                elif case.type == "door" and not self.target_door[(self.splitIdx, self.doorIdx)]:
+                    obstacle[index] = 0
+        return obstacle
+    
+    def get_possible_move(self, pose=0):
+        # get the obstacle position
+        if type(pose) == int :
+            #i = self.agent_pos[0]
+            #j = self.agent_pos[1]
+            obstacle = self.obstacle_pos(self.agent_pos)
+        else:
+            #i = pose[0]
+            #j = pose[1]
+            obstacle = self.obstacle_pos(pose)
+        possible_action = [ActionsReduced.stay] # this action is always possible
+        
+        for index, value in enumerate(obstacle):
+            if value == 0:
+                if index == 0:
+                        possible_action.append(ActionsReduced.forward)
+                elif index ==  1:
+                        possible_action.append(ActionsReduced.backward)
+                elif index == 2:
+                        possible_action.append(ActionsReduced.right)
+                elif index == 3:
+                        possible_action.append(ActionsReduced.left)
+                             
+        return possible_action   
+    
+    def get_reward_1(self, i, j, action, cost_value=0):
         r = 0
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 1
-        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
-            r = 1
+            r = 100 
+#        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
+ #           r = 100
+        elif action == ActionsReduced.stay:
+            r = 0
         else:
             r = 0 - cost_value
         return r
 
+    def get_reward_2(self, action: ActionsAgent2):
+        r = 0
+        if action == ActionsAgent2.nothing:
+            r = 0
+#       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
+ #           r = 100
+        elif action == ActionsAgent2.take_key:
+            r = -1
+
+        return r
+    
     def check_move(self, action, cost_value=0):
         # check if legal move first
         i = self.i
         j = self.j
-        
-        if action in self.get_possible_move(pose=np.array((i,j))):
-            if action == ActionsReduced.forward:
-                j -= 1
-            elif action == ActionsReduced.backward:
-                j += 1
-            elif action == ActionsReduced.right:
-                i += 1
-            elif action == ActionsReduced.left:
-                i -= 1
-        # return a reward (if any)
-        reward = self.get_reward(i, j, cost_value=cost_value)
-        return ((i, j), reward)
+        if isinstance(action, ActionsReduced):
+                if action in self.get_possible_move(pose=np.array((i,j))):
+                    if action == ActionsReduced.forward:
+                        j -= 1
+                    elif action == ActionsReduced.backward:
+                        j += 1
+                    elif action == ActionsReduced.right:
+                        i += 1
+                    elif action == ActionsReduced.left:
+                        i -= 1
+                    elif action == ActionsReduced.stay:
+                        pass # ne rien faire
+                # return a reward (if any)
+                reward = self.get_reward_1(i, j, action, cost_value=cost_value)
+                return ((i, j), reward)
+        elif isinstance(action, ActionsAgent2):
+            if action == ActionsAgent2.nothing:
+                pass
+            elif action == ActionsAgent2.take_key:
+                if self.door:
+                    # considered opened, thus it is not considered an obstacle in solving the bellman equation
+                    if self.target_door[(self.splitIdx, self.doorIdx)]:
+                        self.target_door[(self.splitIdx, self.doorIdx)] = False
+                    else:
+                        self.target_door[(self.splitIdx, self.doorIdx)] = True
+                else: 
+                    pass 
     
-    def get_transition_probs(self, action, cost_value=0):
+    def get_transition_probs(self, action=None, cost_value=0):
         probs = []
-        next_state, reward = self.check_move(action, cost_value=cost_value)
+        next_state, reward = self.check_move(action=action, cost_value=cost_value)
         probs.append((self.obey_prob, reward, next_state))
         return probs
 
@@ -217,13 +264,23 @@ class EmptyReducedEnv(MiniGridEnv):
 
 
         # Place a goal square in the bottom-right corner
-        self.put_obj(Goal(), goal_X_1, goal_Y_1)
-        self.goal_pose.append(np.array([goal_X_1, goal_Y_1]))
-        g1 = Goal()
-        g1.change_color("red")
-        self.put_obj(g1, goal_X_2, goal_Y_2)
+        self.put_obj(Goal(), goal_X_2, goal_Y_2)
         self.goal_pose.append(np.array([goal_X_2, goal_Y_2]))
-
+        #g1 = Goal()
+        #g1.change_color("red")
+        #self.put_obj(g1, goal_X_2, goal_Y_2)
+        #self.goal_pose.append(np.array([goal_X_2, goal_Y_2]))
+        if self.door:
+            # Extension to add wall and door around the goal\
+            # Comment if not necessary  
+            self.splitIdx = self._rand_int(2, width - 2)
+            self.grid.vert_wall(self.splitIdx, 0)
+            # Place a door in the wall
+            self.doorIdx = self._rand_int(1, width - 2)
+            self.target_door = {(self.splitIdx, self.doorIdx):  True}
+            self.put_obj(Door("yellow", is_locked=True), self.splitIdx, self.doorIdx)
+        else:
+            pass
         # Place the agent
         if self.agent_start_pos is not None:
             self.agent_pos = self.agent_start_pos

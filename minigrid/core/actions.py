@@ -25,3 +25,8 @@ class ActionsReduced(IntEnum):
     right = 1
     forward = 2
     backward = 3
+    stay = 4
+
+class ActionsAgent2(IntEnum):
+    nothing = 0
+    take_key = 1

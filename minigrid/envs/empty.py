@@ -64,7 +64,7 @@ class EmptyEnv(MiniGridEnv):
     - `MiniGrid-Empty-16x16-v0`
 
     """
-
+    
     def __init__(
         self,
         size=8,

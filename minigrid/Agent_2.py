@@ -36,6 +36,44 @@ class AssistiveAgent:
         #else:
         self.env.render()
     
+    def value_iteration(self,p_action):
+        states = self.env.get_all_states()
+        Q_prime= {}
+        J = {}
+        for s in states:
+            Q_prime[s] = {}
+            J[s] = 0
+            for a in ALL_POSSIBLE_ACTIONS_2:
+                Q_prime[s][a] = 0
+        while True:
+            big_change = 0
+            old_J = J.copy()
+            for s in self.env.get_states_non_terminated(): 
+                self.env.set_state(s)
+                for a_2 in ALL_POSSIBLE_ACTIONS_2:
+                    #transitions = self.env.get_transition_probs(a, cost_value=1)
+                    #  prepare the envrionment using the current action of agent 2
+                    # if the action is take key it checks the state of the envrionment 
+                    # and open the door it virtually open the door so it has to be virtually
+                    # put back to the previous state od the door i
+                    self.env.check_move(a_2)
+                    next_state_reward = []
+                    for a_1 in ALL_POSSIBLE_ACTIONS_1:
+                        transitions = self.env.get_transition_probs(a_1, cost_value=1)
+                        for (prob, r, state_prime) in transitions:
+                            reward = prob*(p_action[s][a_1]*r + self.gamma* p_action[s][a_1]*old_J[state_prime])
+                            next_state_reward.append(reward)
+                    # put back the door
+                    self.env.check_move(a_2)
+                        
+                    Q_prime[s][a_2]=((np.sum(next_state_reward))+ self.env.get_reward_2(a_2))
+                J[s] = max(Q_prime[s].values())
+                big_change = max(big_change, np.abs(old_J[s]-J[s]))
+            if big_change <= self.threshold :
+                break
+        return J, Q_prime
+    
+    
     def best_action_value(self, J, s, p_action, Q=False):
         best_a = None
         best_value = float('-inf')
@@ -55,12 +93,10 @@ class AssistiveAgent:
                 for (prob, r, state_prime) in transitions:
                     expected_r += prob*p_action[s][a_1]*r
                     expected_v += p_action[s][a_1]*J[state_prime]
-            # put back
+            # put back the door
             self.env.check_move(a_2)
             v = expected_r + self.env.get_reward_2(a_2) + self.gamma*expected_v
             q[a_2]=v
-            #print(a_2)
-            #print(v)
             if v > best_value:
                 best_value = v
                 best_a = a_2
@@ -115,11 +151,29 @@ class AssistiveAgent:
         for s in policy.keys():
             self.env.set_state(s)
             best_a , temp = self.best_action_value(J, s, p_action=p_action)
-            #print(s)
-            #print(best_a)
             policy[s] = best_a
         return policy
 
+    def deduce_policy(self, J, p_action):
+        policy = {}
+        for s in self.env.get_states_non_terminated():
+            policy[s] = np.random.choice(ALL_POSSIBLE_ACTIONS_2)
+        for s in self.env.get_states_non_terminated():
+            self.env.set_state(s) 
+            Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS_2))
+            for action in ALL_POSSIBLE_ACTIONS_2 :
+                self.env.check_move(action)
+                for a_1 in ALL_POSSIBLE_ACTIONS_1:
+                    transitions = self.env.get_transition_probs(a_1, cost_value=1)
+                    for (prob, r, state_prime) in transitions:
+                        Q_table[int(action)] += prob*(p_action[s][a_1]*r + self.gamma* p_action[s][a_1]*J[state_prime])
+                # put back the door
+                self.env.check_move(action)
+                Q_table[int(action)] += self.env.get_reward_2(action)
+               
+            policy[s] = ActionsAgent2(np.argmax(Q_table))
+        return policy
+    
     def reset(self, seed=None):
         self.env.reset(seed=seed)
         self.env.render()

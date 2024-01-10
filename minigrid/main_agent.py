@@ -30,40 +30,54 @@ class MainAgent:
         """Start the window display with blocking event loop"""
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-        J = self.calculate_values()
-        Q = self.calculate_values(Q=True)
-        print(J)
-        #policy = self.calculate_greedy_policy(J)
+        J, Q = self.value_iteration()
+        #policy_l = self.deduce_policy(J)
+
         dist = self.boltzmann_policy(Q=Q, eta=0.95)
+
         J2 = agent_2.calculate_Values(dist)
-        print(J2)
-        # while True:
-        #     #resolve dynamic programming of agent 2
-        #     J2 = agent_2.calculate_Values(dist)
-        #     #Q2 = agent_2.calculate_Values(p_action=dist, Q=True)
-        #     #print(Q2)
-        #     # deduce the actual optimal policy
-        #     policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
-            
-        #     #take agent 2 action in the world
-        #     agent_2.step(policy_agent2[current_agent_pose])
-            
-        #     #recalculate Q function of agent 1
-        #     Q = self.calculate_values(Q=True)
-            
-        #     #new distribution of action of agent 1 
-        #     dist = self.boltzmann_policy(Q=Q, eta=5)
-        #     print(dist)
-        #     #action = policy[current_agent_pose] # uncomment for deterministic action
-            
-        #     # generate an action from distribution
-        #     action = ActionsReduced(self.generate_action(current_agent_pose, dist=dist))
-            
-        #     # take agent 1 action in the world
-        #     self.step(action)
-            
-        #     # update agent pose
-        #     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+        Q2 = agent_2.calculate_Values(dist,Q=True)
+        J2_l, Q2_l = agent_2.value_iteration(dist)
+  
+        policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
+        policy_agent2_l = agent_2.deduce_policy(J2, dist)
+        print(policy_agent2)
+        print("-------------------------")
+        print(policy_agent2_l)
+        print("-------------------------")
+        policy_agent2_n = agent_2.calculate_greedy_policy(J2_l, dist)
+        policy_agent2_n_l = agent_2.deduce_policy(J2_l, dist)
+        print(policy_agent2_n)
+        print("-------------------------")
+        print(policy_agent2_n_l)
+        print("-------------------------")
+        """while True:
+            #resolve dynamic programming of agent 2
+            J2 = agent_2.calculate_Values(dist)
+            Q2 = agent_2.calculate_Values(p_action=dist, Q=True)
+            print(Q2)
+            # deduce the actual optimal policy
+            policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
+        
+            #take agent 2 action in the world
+            agent_2.step(policy_agent2[current_agent_pose])
+        
+            #recalculate Q function of agent 1
+            Q = self.calculate_values(Q=True)
+        
+            #new distribution of action of agent 1 
+            dist = self.boltzmann_policy(Q=Q, eta=5)
+            #print(dist)
+            #action = policy[current_agent_pose] # uncomment for deterministic action
+        
+            # generate an action from distribution
+            action = ActionsReduced(self.generate_action(current_agent_pose, dist=dist))
+        
+            # take agent 1 action in the world
+            self.step(action)
+        
+            # update agent pose
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])"""
 
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -104,17 +118,33 @@ class MainAgent:
         else:
             return q, best_a, best_value
         
-    # def value_action(self, Q, s, a):
-    #     self.env.set_state(s)
-    #     transitions = self.env.get_transition_probs(a, cost_value=1)
-    #     expected_v =  0
-    #     expected_r = 0
-    #     for (prob, r, state_prime) in transitions:
-    #         expected_r += prob*r
-    #         expected_v = max(Q[state_prime].values())
-    #     v = expected_r + self.gamma*expected_v
-
-    #     return v
+    def value_iteration(self, Q=False):
+        states = self.env.get_all_states()
+        Q= {}
+        J = {}
+        for s in states:
+            Q[s] = {}
+            J[s] = 0
+            for a in ALL_POSSIBLE_ACTIONS:
+                    Q[s][a] = 0
+        while True:
+            big_change = 0
+            old_J = J.copy()
+            for s in self.env.get_states_non_terminated(): 
+                self.env.set_state(s)
+                for a in self.env.get_possible_move(s):
+                    next_state_reward = []
+                    transitions = self.env.get_transition_probs(a, cost_value=1)
+                    for (prob, r, state_prime) in transitions:
+                        reward = prob*(r + self.gamma*old_J[state_prime])
+                        next_state_reward.append(reward)
+                        
+                    Q[s][a]=((np.sum(next_state_reward)))
+                J[s] = max(Q[s].values())
+                big_change = max(big_change, np.abs(old_J[s]-J[s]))
+            if big_change <= self.threshold :
+                break
+        return J, Q
     
     def calculate_values(self, Q=False):
         states = self.env.get_all_states()
@@ -128,7 +158,7 @@ class MainAgent:
                 for s in self.env.get_states_non_terminated(): 
                     _, new_v = self.best_action_value(old_v, s)
                     J[s] = new_v
-                    big_change = max(big_change, np.abs(old_v[s]-new_v))
+                    big_change = max(big_change, np.abs(old_v[s]-J[s]))
                     
                 if big_change < self.threshold :
                     break
@@ -176,6 +206,21 @@ class MainAgent:
             policy[s] = best_a
         return policy
     
+    def deduce_policy(self, J):
+        policy = {}
+        for s in self.env.get_states_non_terminated():
+            policy[s] = np.random.choice(ALL_POSSIBLE_ACTIONS)
+        for s in self.env.get_states_non_terminated():
+            self.env.set_state(s) 
+            Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS))
+            for action in ALL_POSSIBLE_ACTIONS :
+                transitions = self.env.get_transition_probs(action, cost_value=1)
+                for (prob, r, state_prime) in transitions:
+                    Q_table[int(action)] += prob*(r + self.gamma*J[state_prime])
+            policy[s] = ActionsReduced(np.argmax(Q_table))
+        return policy                   
+                
+        
     #output the distribution over action in all state of agent 1
     def boltzmann_policy(self, Q, eta):
         dist = {}

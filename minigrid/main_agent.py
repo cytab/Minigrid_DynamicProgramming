@@ -24,7 +24,7 @@ class MainAgent:
         self.seed = seed
         self.closed = False
         self.gamma = 0.99
-        self.threshold = 1e-6
+        self.threshold = 1e-6   ``
 
     def start(self, agent: AssistiveAgent):
         """Start the window display with blocking event loop"""
@@ -33,8 +33,8 @@ class MainAgent:
         J, Q = self.value_iteration()
         #policy_l = self.deduce_policy(J)
 
-        dist = self.boltzmann_policy(Q=Q, eta=0.95)
-
+        dist = self.boltzmann_policy(Q=Q, eta=2)
+    
         J2 = agent_2.calculate_Values(dist)
         Q2 = agent_2.calculate_Values(dist,Q=True)
         J2_l, Q2_l = agent_2.value_iteration(dist)
@@ -51,6 +51,8 @@ class MainAgent:
         print("-------------------------")
         print(policy_agent2_n_l)
         print("-------------------------")
+        while True:
+            pass
         """while True:
             #resolve dynamic programming of agent 2
             J2 = agent_2.calculate_Values(dist)
@@ -230,6 +232,8 @@ class MainAgent:
             dist[s] = {}
             total_prob[s] = 0
             for a in ALL_POSSIBLE_ACTIONS:
+                dist[s][a] = 0
+            for a in self.env.get_possible_move(s) :
                 dist[s][a] = (np.exp(eta*Q[s][a]))
                 total_prob[s] += dist[s][a]
             for a in ALL_POSSIBLE_ACTIONS:

@@ -4,7 +4,7 @@ from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Goal, Door, Key
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2
+from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2, WorldSate
 from minigrid.core.world_object import Point, WorldObj
 
 class EmptyReducedEnv(MiniGridEnv):
@@ -198,7 +198,7 @@ class EmptyReducedEnv(MiniGridEnv):
 #       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsAgent2.take_key:
-            r = -1
+            r = 0
 
         return r
     
@@ -207,6 +207,8 @@ class EmptyReducedEnv(MiniGridEnv):
         i = self.i
         j = self.j
         if isinstance(action, ActionsReduced):
+                #print((i,j))
+                #print(self.get_possible_move(pose=np.array((i,j))))
                 if action in self.get_possible_move(pose=np.array((i,j))):
                     if action == ActionsReduced.forward:
                         j -= 1
@@ -233,7 +235,19 @@ class EmptyReducedEnv(MiniGridEnv):
                         self.target_door[(self.splitIdx, self.doorIdx)] = True
                 else: 
                     pass 
-    
+    def open_door_manually(self, worldState):
+        if worldState == WorldSate.closed_door:
+                pass
+        elif worldState == WorldSate.open_door:
+                if self.door:
+                    # considered opened, thus it is not considered an obstacle in solving the bellman equation
+                    if self.target_door[(self.splitIdx, self.doorIdx)]:
+                        self.target_door[(self.splitIdx, self.doorIdx)] = False
+                    else:
+                        self.target_door[(self.splitIdx, self.doorIdx)] = True
+                else:
+                    pass 
+                
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []
         next_state, reward = self.check_move(action=action, cost_value=cost_value)

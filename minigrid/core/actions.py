@@ -30,3 +30,10 @@ class ActionsReduced(IntEnum):
 class ActionsAgent2(IntEnum):
     nothing = 0
     take_key = 1
+    
+class WorldSate(IntEnum):
+    open_door = 0
+    closed_door = 1
+    
+class GoalState(IntEnum):
+    green_goal = 0

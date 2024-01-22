@@ -176,7 +176,6 @@ class EmptyReducedEnv(MiniGridEnv):
                         possible_action.append(ActionsReduced.right)
                 elif index == 3:
                         possible_action.append(ActionsReduced.left)
-                             
         return possible_action   
     
     def get_reward_1(self, i, j, action, cost_value=0):
@@ -188,7 +187,7 @@ class EmptyReducedEnv(MiniGridEnv):
         elif action == ActionsReduced.stay:
             r = 0
         else:
-            r = 0 - cost_value
+            r = r - cost_value
         return r
 
     def get_reward_2(self, action: ActionsAgent2):
@@ -198,7 +197,7 @@ class EmptyReducedEnv(MiniGridEnv):
 #       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsAgent2.take_key:
-            r = 0
+            r = -1
 
         return r
     
@@ -235,6 +234,7 @@ class EmptyReducedEnv(MiniGridEnv):
                         self.target_door[(self.splitIdx, self.doorIdx)] = True
                 else: 
                     pass 
+                
     def open_door_manually(self, worldState):
         if worldState == WorldSate.closed_door:
                 pass
@@ -252,6 +252,15 @@ class EmptyReducedEnv(MiniGridEnv):
         probs = []
         next_state, reward = self.check_move(action=action, cost_value=cost_value)
         probs.append((self.obey_prob, reward, next_state))
+        return probs
+    
+    def get_transition_probsA2(self, w, action=None, cost_value=0):
+        probs = []
+        next_word = w
+        next_state, reward = self.check_move(action=action, cost_value=cost_value)
+        if action == ActionsAgent2.take_key:
+            next_word = WorldSate.open_door
+        probs.append((self.obey_prob, reward, next_word, next_state))
         return probs
 
     def set_state(self, s):

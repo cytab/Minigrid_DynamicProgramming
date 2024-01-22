@@ -201,7 +201,7 @@ class EmptyReducedEnv(MiniGridEnv):
 
         return r
     
-    def check_move(self, action, cost_value=0):
+    def check_move(self, action, w=WorldSate.open_door, cost_value=0):
         # check if legal move first
         i = self.i
         j = self.j
@@ -225,7 +225,7 @@ class EmptyReducedEnv(MiniGridEnv):
         elif isinstance(action, ActionsAgent2):
             if action == ActionsAgent2.nothing:
                 pass
-            elif action == ActionsAgent2.take_key:
+            elif action == ActionsAgent2.take_key and w is WorldSate.closed_door:
                 if self.door:
                     # considered opened, thus it is not considered an obstacle in solving the bellman equation
                     if self.target_door[(self.splitIdx, self.doorIdx)]:
@@ -233,7 +233,9 @@ class EmptyReducedEnv(MiniGridEnv):
                     else:
                         self.target_door[(self.splitIdx, self.doorIdx)] = True
                 else: 
-                    pass 
+                    pass
+            elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
+                pass
                 
     def open_door_manually(self, worldState):
         if worldState == WorldSate.closed_door:

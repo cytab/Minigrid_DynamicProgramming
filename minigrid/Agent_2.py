@@ -72,9 +72,15 @@ class AssistiveAgent:
                         # put back to the previous state od the door i
                         self.env.check_move(action=a_2, w=w)
                         next_state_reward = []
-                        for a_1 in ALL_POSSIBLE_ACTIONS_1:
+                        for a_1 in self.env.get_possible_move(s):
                             transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
+                        
                             for (prob, r, world_prime, state_prime) in transitions:
+                                if a_2 == ActionsAgent2.take_key and w == WorldSate.closed_door :
+                                    world_prime = WorldSate.open_door
+                                print(w)
+                                print(world_prime)
+                                print(s)
                                 reward = prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                                 next_state_reward.append(reward)
                         # put back the door
@@ -189,10 +195,12 @@ class AssistiveAgent:
                 for action in ALL_POSSIBLE_ACTIONS_2 :
                     if w is not WorldSate.open_door:
                         self.env.check_move(action)
-                    for a_1 in ALL_POSSIBLE_ACTIONS_1:
+                    for a_1 in self.env.get_possible_move(s):
                         transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
-                        for (prob, r, wolrd_prime, state_prime) in transitions:
-                            Q_table[int(action)] += prob*(p_action[wolrd_prime][s][g][a_1]*r + self.gamma* p_action[w][s][g][a_1]*J[wolrd_prime][state_prime][g])
+                        for (prob, r, world_prime, state_prime) in transitions:
+                            if action == ActionsAgent2.take_key and w == WorldSate.closed_door:
+                                 world_prime = WorldSate.open_door
+                            Q_table[int(action)] += prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                     # put back the door
                     if w is not WorldSate.open_door:
                         self.env.check_move(action)

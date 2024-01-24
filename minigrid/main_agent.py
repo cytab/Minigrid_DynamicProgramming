@@ -42,16 +42,16 @@ class MainAgent:
         #dist = self.boltzmann_policy(Q=Q, eta=2)
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
-        dist = self.boltzmann_policy(Q,eta=1)
-        #pprint.PrettyPrinter(width=20).pprint(dist)
+        dist = self.boltzmann_policy(Q,eta=3)
+        pprint.PrettyPrinter(width=20).pprint(dist)
         print("-------------------------")
         #J2 = agent_2.calculate_Values(dist)
         #Q2 = agent_2.calculate_Values(dist,Q=True)
         J2_l, Q2_l = agent_2.value_iteration(dist)
-        pprint.PrettyPrinter(width=20).pprint(Q2_l)
+        #pprint.PrettyPrinter(width=20).pprint(Q2_l)
         #policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
-        #policy_agent2_l = agent_2.deduce_policy(J2, dist)
-        #print(policy_agent2)
+        policy_agent2_l = agent_2.deduce_policy(J2_l, dist)
+        pprint.PrettyPrinter(width=20).pprint(policy_agent2_l)
         print("-------------------------")
         #print(policy_agent2_l)
         print("-------------------------")
@@ -145,7 +145,7 @@ class MainAgent:
                 g = GoalState.green_goal
                 J[w][s][g] = 0
                 Q[w][s][g] = {}
-                for a in ALL_POSSIBLE_ACTIONS:
+                for a in self.env.get_possible_move(s):
                     Q[w][s][g][a] = 0
         while True:
             big_change[WorldSate.open_door] = 0
@@ -159,10 +159,12 @@ class MainAgent:
                     # open the door in Value iteration
                     temp = J[w][s][g]
                     #do things to set goals
-                    for a in ALL_POSSIBLE_ACTIONS:
+                    for a in self.env.get_possible_move(s):
                         next_state_reward = []
                         transitions = self.env.get_transition_probs(a, cost_value=1)
                         for (prob, r, state_prime) in transitions:
+                            print(s)
+                            print(state_prime)
                             reward = prob*(r + self.gamma*J[w][state_prime][g])
                             next_state_reward.append(reward)
                             
@@ -251,7 +253,7 @@ class MainAgent:
             for s in self.env.get_states_non_terminated():
                 self.env.set_state(s)
                 Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS))
-                for action in ALL_POSSIBLE_ACTIONS :
+                for action in self.env.get_possible_move(s) :
                     transitions = self.env.get_transition_probs(action, cost_value=1)
                     for (prob, r, state_prime) in transitions:
                         Q_table[int(action)] += prob*(r + self.gamma*J[w][state_prime][g])
@@ -276,13 +278,16 @@ class MainAgent:
                 
                 dist[w][s][g] = {}
                 total_prob[w][s][g] = 0
-                for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
+                for a in self.env.get_possible_move(s): # still debugging this part but works fine
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
-                for a in ALL_POSSIBLE_ACTIONS:
-                    dist[w][s][g][a] = (np.exp(eta*Q[w][s][g][a]))
+                for a in self.env.get_possible_move(s):
+                    # use max normalization method where we use exp(array - max(array))
+                    # instead of exp(arr) which can cause infinite value
+                    # we can improve this part of the code
+                    dist[w][s][g][a] = (np.exp(eta*(Q[w][s][g][a] - max(Q[w][s][g].values()))))
                     total_prob[w][s][g] += dist[w][s][g][a]
-                for a in ALL_POSSIBLE_ACTIONS:
+                for a in self.env.get_possible_move(s):
                     dist[w][s][g][a] = (dist[w][s][g][a])/(total_prob[w][s][g])
         return dist
     

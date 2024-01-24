@@ -181,7 +181,7 @@ class EmptyReducedEnv(MiniGridEnv):
     def get_reward_1(self, i, j, action, cost_value=0):
         r = 0
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 100 
+            r = 1000 
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsReduced.stay:
@@ -258,10 +258,11 @@ class EmptyReducedEnv(MiniGridEnv):
     
     def get_transition_probsA2(self, w, action=None, cost_value=0):
         probs = []
-        next_word = w
         next_state, reward = self.check_move(action=action, cost_value=cost_value)
         if action == ActionsAgent2.take_key:
             next_word = WorldSate.open_door
+        else:
+            next_word = WorldSate.closed_door
         probs.append((self.obey_prob, reward, next_word, next_state))
         return probs
 

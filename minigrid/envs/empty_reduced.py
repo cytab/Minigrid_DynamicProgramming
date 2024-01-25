@@ -119,6 +119,8 @@ class EmptyReducedEnv(MiniGridEnv):
         s = list()
         for i in range(1, self.size -1) :
             for j in range(1, self.size-1):
+                #if self.grid.get(*(i,j)).type == "wall":
+                #    break
                 if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
                     break
 #                elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
@@ -181,7 +183,7 @@ class EmptyReducedEnv(MiniGridEnv):
     def get_reward_1(self, i, j, action, cost_value=0):
         r = 0
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 1000 
+            r = 200 
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsReduced.stay:

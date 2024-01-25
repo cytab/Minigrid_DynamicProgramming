@@ -48,7 +48,7 @@ class MainAgent:
         #J2 = agent_2.calculate_Values(dist)
         #Q2 = agent_2.calculate_Values(dist,Q=True)
         J2_l, Q2_l = agent_2.value_iteration(dist)
-        #pprint.PrettyPrinter(width=20).pprint(Q2_l)
+        pprint.PrettyPrinter(width=20).pprint(Q2_l)
         #policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
         policy_agent2_l = agent_2.deduce_policy(J2_l, dist)
         pprint.PrettyPrinter(width=20).pprint(policy_agent2_l)
@@ -140,6 +140,7 @@ class MainAgent:
             J[w] = {}
             big_change[w] = 0
             for s in states:
+                self.env.set_state(s)
                 J[w][s]= {}
                 Q[w][s] = {}
                 g = GoalState.green_goal
@@ -163,8 +164,8 @@ class MainAgent:
                         next_state_reward = []
                         transitions = self.env.get_transition_probs(a, cost_value=1)
                         for (prob, r, state_prime) in transitions:
-                            print(s)
-                            print(state_prime)
+                            #print(s)
+                            #print(state_prime)
                             reward = prob*(r + self.gamma*J[w][state_prime][g])
                             next_state_reward.append(reward)
                             
@@ -215,7 +216,7 @@ class MainAgent:
             #while True:
             #    print('faIT')
             #    big_change = 0
-            #    temp = Q.copy()        
+            #    temp = Q.copy()
             #    for s in states:
             #        for a in self.env.get_possible_move(s):
             #            Q[s][a] = self.value_action(temp, s, a)
@@ -270,9 +271,12 @@ class MainAgent:
         states = self.env.get_states_non_terminated()
         g = GoalState.green_goal
         for w in ALL_POSSIBLE_WOLRD:
+            self.env.open_door_manually(w)
             dist[w] = {}
             total_prob[w] = {}
+            #print(w)
             for s in states:
+                self.env.set_state(s)
                 dist[w][s] = {}
                 total_prob[w][s] = {}
                 
@@ -281,14 +285,18 @@ class MainAgent:
                 for a in self.env.get_possible_move(s): # still debugging this part but works fine
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
+                #print(s)
                 for a in self.env.get_possible_move(s):
+                    #print(a)
                     # use max normalization method where we use exp(array - max(array))
                     # instead of exp(arr) which can cause infinite value
                     # we can improve this part of the code
-                    dist[w][s][g][a] = (np.exp(eta*(Q[w][s][g][a] - max(Q[w][s][g].values()))))
+                    dist[w][s][g][a] = (np.exp(eta*(Q[w][s][g][a])))
                     total_prob[w][s][g] += dist[w][s][g][a]
                 for a in self.env.get_possible_move(s):
                     dist[w][s][g][a] = (dist[w][s][g][a])/(total_prob[w][s][g])
+            # CLOSE the door in Value iteration
+            self.env.open_door_manually(w)
         return dist
     
     def generate_action(self, state, worldState, goal, dist):

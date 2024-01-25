@@ -60,9 +60,12 @@ class AssistiveAgent:
             g = GoalState.green_goal
             for w in ALL_POSSIBLE_WOLRD:
                 # open the door in Value iteration
-                self.env.open_door_manually(w)     
+                self.env.open_door_manually(w)
+                #print(w)     
                 for s in self.env.get_states_non_terminated():
                     self.env.set_state(s)
+                    #print(s)
+                    #print(self.env.get_possible_move(s))
                     temp = J[w][s][g]
                     for a_2 in ALL_POSSIBLE_ACTIONS_2:
                         #transitions = self.env.get_transition_probs(a, cost_value=1)
@@ -72,15 +75,20 @@ class AssistiveAgent:
                         # put back to the previous state od the door i
                         self.env.check_move(action=a_2, w=w)
                         next_state_reward = []
+                        #print(a_2)
                         for a_1 in self.env.get_possible_move(s):
                             transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
-                        
+                            #print(p_action[w][s][g][a_1])
                             for (prob, r, world_prime, state_prime) in transitions:
                                 if a_2 == ActionsAgent2.take_key and w == WorldSate.closed_door :
                                     world_prime = WorldSate.open_door
-                                print(w)
-                                print(world_prime)
-                                print(s)
+                                if a_2 == ActionsAgent2.take_key and w == WorldSate.open_door :
+                                    world_prime = WorldSate.open_door
+                                if a_2 == ActionsAgent2.nothing:
+                                    world_prime = w
+                                #print(world_prime)
+                                
+                                       
                                 reward = prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                                 next_state_reward.append(reward)
                         # put back the door
@@ -193,17 +201,19 @@ class AssistiveAgent:
                 self.env.set_state(s) 
                 Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS_2))
                 for action in ALL_POSSIBLE_ACTIONS_2 :
-                    if w is not WorldSate.open_door:
-                        self.env.check_move(action)
+                    self.env.check_move(action=action, w=w)
                     for a_1 in self.env.get_possible_move(s):
                         transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
                         for (prob, r, world_prime, state_prime) in transitions:
-                            if action == ActionsAgent2.take_key and w == WorldSate.closed_door:
-                                 world_prime = WorldSate.open_door
+                            if action == ActionsAgent2.take_key and w == WorldSate.closed_door :
+                                world_prime = WorldSate.open_door
+                            if action == ActionsAgent2.take_key and w == WorldSate.open_door :
+                                world_prime = WorldSate.open_door
+                            if action == ActionsAgent2.nothing:
+                                world_prime = w
                             Q_table[int(action)] += prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                     # put back the door
-                    if w is not WorldSate.open_door:
-                        self.env.check_move(action)
+                    self.env.check_move(action=action, w=w)
                     Q_table[int(action)] += self.env.get_reward_2(action)
                 policy[w][s][g] = ActionsAgent2(np.argmax(Q_table))
             self.env.open_door_manually(w)

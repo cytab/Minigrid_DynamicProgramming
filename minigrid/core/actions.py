@@ -37,3 +37,4 @@ class WorldSate(IntEnum):
     
 class GoalState(IntEnum):
     green_goal = 0
+    red_goal = 1

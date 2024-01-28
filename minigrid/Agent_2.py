@@ -104,7 +104,7 @@ class AssistiveAgent:
                 break
         return J, Q_prime
     
-    
+    """
     def best_action_value(self, J, s, p_action, Q=False):# NOT UPDATED WITH WORLD AND GOAL STATE
         best_a = None
         best_value = float('-inf')
@@ -184,7 +184,7 @@ class AssistiveAgent:
             best_a , temp = self.best_action_value(J, s, p_action=p_action)
             policy[s] = best_a
         return policy
-
+"""
     def deduce_policy(self, J, p_action):
         policy = {}
         g= GoalState.green_goal

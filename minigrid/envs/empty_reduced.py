@@ -2,11 +2,24 @@ from __future__ import annotations
 import numpy as np
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import Goal, Door, Key
+from minigrid.core.world_object import Goal, Door, Key, Wall
 from minigrid.minigrid_env import MiniGridEnv
 from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2, WorldSate
 from minigrid.core.world_object import Point, WorldObj
 
+class LockedRoom:
+    def __init__(self, top, size, doorPos):
+        self.top = top
+        self.size = size
+        self.doorPos = doorPos
+        self.color = None
+        self.locked = False
+
+    def rand_pos(self, env):
+        topX, topY = self.top
+        sizeX, sizeY = self.size
+        return env._rand_pos(topX + 1, topX + sizeX - 1, topY + 1, topY + sizeY - 1)
+    
 class EmptyReducedEnv(MiniGridEnv):
     """
     ## Description
@@ -84,6 +97,7 @@ class EmptyReducedEnv(MiniGridEnv):
         agent_start_dir=0,
         max_steps: int | None = None,
         door=True,
+        multiple_goal=False,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -100,6 +114,7 @@ class EmptyReducedEnv(MiniGridEnv):
         self.doorIdx = 0
         self.target_door = {}
         self.door = door
+        self.multiple_goal = multiple_goal
 
 
         if max_steps is None:
@@ -250,7 +265,11 @@ class EmptyReducedEnv(MiniGridEnv):
                     else:
                         self.target_door[(self.splitIdx, self.doorIdx)] = True
                 else:
-                    pass 
+                    pass
+    
+    def get_world_state(self):
+        #return simply if the door is open (case none) or close (case door)
+        return  WorldSate.open_door if self.grid.get(*(self.splitIdx,self.doorIdx)) is None else WorldSate.closed_door
                 
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []
@@ -292,23 +311,51 @@ class EmptyReducedEnv(MiniGridEnv):
 
 
         # Place a goal square in the bottom-right corner
-        self.put_obj(Goal(), goal_X_2, goal_Y_2)
-        self.goal_pose.append(np.array([goal_X_2, goal_Y_2]))
+        
         #g1 = Goal()
         #g1.change_color("red")
         #self.put_obj(g1, goal_X_2, goal_Y_2)
         #self.goal_pose.append(np.array([goal_X_2, goal_Y_2]))
-        if self.door:
+        if not self.multiple_goal:
+            self.put_obj(Goal(), goal_X_2, goal_Y_2)
+            self.goal_pose.append(np.array([goal_X_2, goal_Y_2]))
+            if self.door:
+                # Extension to add wall and door around the goal\
+                # Comment if not necessary  
+                self.splitIdx = self._rand_int(2, width - 2)
+                self.grid.vert_wall(self.splitIdx, 0)
+                # Place a door in the wall
+                self.doorIdx = self._rand_int(1, width - 2)
+                self.target_door = {(self.splitIdx, self.doorIdx):  True}
+                self.put_obj(Door("yellow", is_locked=True), self.splitIdx, self.doorIdx)
+            else:
+                pass
+        else :
+            self.rooms = []
             # Extension to add wall and door around the goal\
             # Comment if not necessary  
-            self.splitIdx = self._rand_int(2, width - 2)
-            self.grid.vert_wall(self.splitIdx, 0)
-            # Place a door in the wall
-            self.doorIdx = self._rand_int(1, width - 2)
-            self.target_door = {(self.splitIdx, self.doorIdx):  True}
-            self.put_obj(Door("yellow", is_locked=True), self.splitIdx, self.doorIdx)
-        else:
-            pass
+            rWallIdx = width // 2 + 2
+            for j in range(0, height):
+                self.grid.set(rWallIdx, j, Wall())
+            
+            # Room splitting walls
+            for n in range(0, 2):
+                j = n * (height // 2)
+                for i in range(rWallIdx, width):
+                    self.grid.set(i, j, Wall())
+
+                roomW = 5 + 1
+                roomH = height // 3 + 1
+                self.rooms.append(
+                    LockedRoom((rWallIdx, j), (roomW, roomH), (rWallIdx, j + 4))
+                )
+                self.target_door[((rWallIdx, j + 3))] = True
+                self.put_obj(Door("yellow", is_locked=True), rWallIdx, j+4)
+                goalPos = self.rooms[n].rand_pos(self)
+                self.grid.set(*goalPos, Goal())
+                self.goal_pose.append(np.array([*goalPos]))
+            
+            
         # Place the agent
         if self.agent_start_pos is not None:
             self.agent_pos = self.agent_start_pos
@@ -319,4 +366,4 @@ class EmptyReducedEnv(MiniGridEnv):
         self.i = self.agent_pos[0]
         self.j = self.agent_pos[1]
 
-        self.mission = "get to the green goal square"
+        self.mission = "get to somewhere"

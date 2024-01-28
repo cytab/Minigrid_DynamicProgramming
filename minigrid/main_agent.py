@@ -16,7 +16,7 @@ from minigrid.Agent_2 import AssistiveAgent
 
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
-ALL_POSSIBLE_GOAL = (GoalState.green_goal)
+ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 class MainAgent:
     def __init__(
         self,
@@ -34,62 +34,47 @@ class MainAgent:
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         J, Q = self.value_iteration()
-        #Ql = self.calculate_values(Q=True)
-        #policy_l = self.deduce_policy(J)
-        pprint.PrettyPrinter(width=20).pprint(Q)
+        #pprint.PrettyPrinter(width=20).pprint(Q)
         print("-------------------------")
-   
-        #dist = self.boltzmann_policy(Q=Q, eta=2)
+
+        # Determine initial policy
+        dist = self.boltzmann_policy(Q,eta=3)
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
-        dist = self.boltzmann_policy(Q,eta=3)
-        pprint.PrettyPrinter(width=20).pprint(dist)
-        print("-------------------------")
-        #J2 = agent_2.calculate_Values(dist)
-        #Q2 = agent_2.calculate_Values(dist,Q=True)
-        J2_l, Q2_l = agent_2.value_iteration(dist)
-        pprint.PrettyPrinter(width=20).pprint(Q2_l)
-        #policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
-        policy_agent2_l = agent_2.deduce_policy(J2_l, dist)
-        pprint.PrettyPrinter(width=20).pprint(policy_agent2_l)
-        print("-------------------------")
-        #print(policy_agent2_l)
-        print("-------------------------")
-        #policy_agent2_n = agent_2.calculate_greedy_policy(J2_l, dist)
-        #policy_agent2_n_l = agent_2.deduce_policy(J2_l, dist)
-        #print(policy_agent2_n)
-        print("-------------------------")
-        #print(policy_agent2_n_l)
-        print("-------------------------")
+
         while True:
-            pass
-        """while True:
+            # get world state
+            current_world = self.env.get_world_state()
+            print("State of current world: ")
+            print(current_world)
+            
+            #current agent goal 
+            g = GoalState.green_goal
             #resolve dynamic programming of agent 2
-            J2 = agent_2.calculate_Values(dist)
-            Q2 = agent_2.calculate_Values(p_action=dist, Q=True)
-            print(Q2)
+            J2, Q2 = agent_2.value_iteration(dist)
+            
             # deduce the actual optimal policy
-            policy_agent2 = agent_2.calculate_greedy_policy(J2, dist)
-        
+            policy_agent2 = agent_2.deduce_policy(J2, dist)
+            
             #take agent 2 action in the world
-            agent_2.step(policy_agent2[current_agent_pose])
+            print("Action taken by agent 2 : ")
+            print(policy_agent2[current_world][current_agent_pose][g])
+            agent_2.step(policy_agent2[current_world][current_agent_pose][g])
         
             #recalculate Q function of agent 1
-            Q = self.calculate_values(Q=True)
+            J, Q = self.value_iteration()
         
             #new distribution of action of agent 1 
-            dist = self.boltzmann_policy(Q=Q, eta=5)
-            #print(dist)
-            #action = policy[current_agent_pose] # uncomment for deterministic action
-        
+            dist = self.boltzmann_policy(Q=Q, eta=3)
+            
             # generate an action from distribution
-            action = ActionsReduced(self.generate_action(current_agent_pose, dist=dist))
+            action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=GoalState.green_goal,dist=dist))
         
             # take agent 1 action in the world
             self.step(action)
         
             # update agent pose
-            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])"""
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
 
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -107,7 +92,7 @@ class MainAgent:
     def reset(self, seed=None):
         self.env.reset(seed=seed)
         self.env.render()
-    
+    """
     def best_action_value(self, J, s, Q=False): # NOT UPDATED WITH WORLD AND GOAL STATE
         best_a = None
         best_value = float('-inf')
@@ -129,12 +114,13 @@ class MainAgent:
             return best_a, best_value
         else:
             return q, best_a, best_value
-        
+        """
     def value_iteration(self, Q=False):
         states = self.env.get_all_states()
         Q= {}
         J = {}
         big_change ={}
+        #for g in ALL_POSSIBLE_GOAL:
         for w in ALL_POSSIBLE_WOLRD:
             Q[w] = {}
             J[w] = {}
@@ -178,7 +164,7 @@ class MainAgent:
             if big_change[WorldSate.closed_door] <= self.threshold and big_change[WorldSate.open_door] <= self.threshold:
                 break
         return J, Q
-    
+    """
     def calculate_values(self, Q=False):# NOT UPDATED WITH WORLD AND GOAL STATE
         states = self.env.get_all_states()
         if not Q:
@@ -238,7 +224,7 @@ class MainAgent:
             best_a , _ = self.best_action_value(J, s)
             policy[s] = best_a
         return policy
-    
+    """
     def deduce_policy(self, J):
         policy = {}
         g= GoalState.green_goal
@@ -300,8 +286,9 @@ class MainAgent:
         return dist
     
     def generate_action(self, state, worldState, goal, dist):
-        prob = [dist[worldState][state][goal][a] for a in ALL_POSSIBLE_ACTIONS]
-        generated_action = np.random.choice(ALL_POSSIBLE_ACTIONS, p=prob)
+        possible_action = [a for a in dist[worldState][state][goal].keys()]
+        prob = [dist[worldState][state][goal][a] for a in dist[worldState][state][goal].keys()]
+        generated_action = np.random.choice(possible_action, p=prob)
         return generated_action
 
 

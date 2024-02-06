@@ -4,7 +4,7 @@ from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Goal, Door, Key, Wall
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2, WorldSate
+from minigrid.core.actions import Actions, ActionsReduced, ActionsAgent2, WorldSate, GoalState
 from minigrid.core.world_object import Point, WorldObj
 
 class LockedRoom:
@@ -114,7 +114,9 @@ class EmptyReducedEnv(MiniGridEnv):
         self.doorIdx = 0
         self.target_door = {}
         self.door = door
-        self.multiple_goal = multiple_goal
+        self.multiple_goal = multiple_goal  
+        self.goal_ = list() # list of every goal postion
+        self.goal_pose = list() # current_goal
 
 
         if max_steps is None:
@@ -242,35 +244,65 @@ class EmptyReducedEnv(MiniGridEnv):
         elif isinstance(action, ActionsAgent2):
             if action == ActionsAgent2.nothing:
                 pass
-            elif action == ActionsAgent2.take_key and w is WorldSate.closed_door:
-                if self.door:
-                    # considered opened, thus it is not considered an obstacle in solving the bellman equation
-                    if self.target_door[(self.splitIdx, self.doorIdx)]:
-                        self.target_door[(self.splitIdx, self.doorIdx)] = False
-                    else:
-                        self.target_door[(self.splitIdx, self.doorIdx)] = True
-                else: 
+            if not self.multiple_goal:
+                if action == ActionsAgent2.take_key and w is WorldSate.closed_door:
+                    if self.door:
+                        # considered opened, thus it is not considered an obstacle in solving the bellman equation
+                        if self.target_door[(self.splitIdx, self.doorIdx)]:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = False
+                        else:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = True
+                    else: 
+                        pass
+                elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
                     pass
-            elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
-                pass
+            else:
+                pass ## add handling more action 
+                
+                
                 
     def open_door_manually(self, worldState):
-        if worldState == WorldSate.closed_door:
-                pass
-        elif worldState == WorldSate.open_door:
-                if self.door:
-                    # considered opened, thus it is not considered an obstacle in solving the bellman equation
-                    if self.target_door[(self.splitIdx, self.doorIdx)]:
-                        self.target_door[(self.splitIdx, self.doorIdx)] = False
-                    else:
-                        self.target_door[(self.splitIdx, self.doorIdx)] = True
-                else:
+        if not self.multiple_goal:
+            if worldState == WorldSate.closed_door:
                     pass
-    
+            elif worldState == WorldSate.open_door:
+                    if self.door:
+                        # considered opened, thus it is not considered an obstacle in solving the bellman equation
+                        if self.target_door[(self.splitIdx, self.doorIdx)]:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = False
+                        else:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = True
+                    else:
+                        pass
+        else: 
+            if worldState == WorldSate.closed_door1 or worldState == WorldSate.closed_door2:
+                pass
+            elif worldState == WorldSate.open_door1:
+                if self.target_door[self.rooms[0].doorPos]:
+                    self.target_door[self.rooms[0].doorPos] = False
+                else:
+                    self.target_door[self.rooms[0].doorPos] = True
+            elif worldState == WorldSate.open_door2:
+                if self.target_door[self.rooms[0].doorPos]:
+                    self.target_door[self.rooms[0].doorPos] = False
+                else:
+                    self.target_door[self.rooms[0].doorPos] = True
+        
     def get_world_state(self):
         #return simply if the door is open (case none) or close (case door)
-        return  WorldSate.open_door if self.grid.get(*(self.splitIdx,self.doorIdx)) is None else WorldSate.closed_door
+        if not self.multiple_goal:
+            return  WorldSate.open_door if self.grid.get(*(self.splitIdx,self.doorIdx)) is None else WorldSate.closed_door
+        else:
+            world_state = (WorldSate.closed_door1, WorldSate.closed_door2)
+            for i, room in enumerate(self.rooms):
+                if self.grid.get(*room.doorPos) is None and i == 0:
+                    world_state[i] = WorldSate.open_door1
+                if self.grid.get(*room.doorPos) is None and i == 1:
+                    world_state[i] = WorldSate.open_door2
+        
+            return world_state 
                 
+        
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []
         next_state, reward = self.check_move(action=action, cost_value=cost_value)
@@ -280,16 +312,19 @@ class EmptyReducedEnv(MiniGridEnv):
     def get_transition_probsA2(self, w, action=None, cost_value=0):
         probs = []
         next_state, reward = self.check_move(action=action, cost_value=cost_value)
-        if action == ActionsAgent2.take_key:
-            next_word = WorldSate.open_door
-        else:
-            next_word = WorldSate.closed_door
-        probs.append((self.obey_prob, reward, next_word, next_state))
+        probs.append((self.obey_prob, reward, next_state))
         return probs
 
     def set_state(self, s):
         self.i = s[0]
         self.j = s[1]
+    
+    def set_env_to_goal(self, goal):
+        self.goal_pose = list()
+        if goal == GoalState.green_goal:
+            self.goal_pose.append(self.goal_[0])
+        elif goal == GoalState.red_goal:
+            self.goal_pose.append(self.goal_[1])
     
     @staticmethod
     def _gen_mission():
@@ -300,7 +335,6 @@ class EmptyReducedEnv(MiniGridEnv):
         # Create an empty grid
         self.grid = Grid(width , height)
         self.num_goal = 2
-        self.goal_pose = list()
         goal_X_1 = width - 4
         goal_Y_1 = height - 4
         
@@ -349,11 +383,11 @@ class EmptyReducedEnv(MiniGridEnv):
                 self.rooms.append(
                     LockedRoom((rWallIdx, j), (roomW, roomH), (rWallIdx, j + 4))
                 )
-                self.target_door[((rWallIdx, j + 3))] = True
+                self.target_door[((rWallIdx, j + 4))] = True
                 self.put_obj(Door("yellow", is_locked=True), rWallIdx, j+4)
                 goalPos = self.rooms[n].rand_pos(self)
                 self.grid.set(*goalPos, Goal())
-                self.goal_pose.append(np.array([*goalPos]))
+                self.goal_.append(np.array([*goalPos]))
             
             
         # Place the agent

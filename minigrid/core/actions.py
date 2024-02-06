@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
+Number_room = 1
 
 class Actions(IntEnum):
     # Turn left, turn right, move forward
@@ -30,11 +31,19 @@ class ActionsReduced(IntEnum):
 class ActionsAgent2(IntEnum):
     nothing = 0
     take_key = 1
-    
+
+
 class WorldSate(IntEnum):
-    open_door = 0
-    closed_door = 1
-    
+    if Number_room == 1:
+        open_door = 0
+        closed_door = 1
+    elif Number_room == 2:
+        open_door1 = 0
+        closed_door1 = 1
+        open_door2 = 2
+        closed_door2 = 3
+        
+        
 class GoalState(IntEnum):
     green_goal = 0
     red_goal = 1

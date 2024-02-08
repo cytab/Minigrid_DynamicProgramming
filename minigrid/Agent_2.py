@@ -6,8 +6,9 @@ from minigrid.core.world_object import Wall
 
 ALL_POSSIBLE_ACTIONS_1 = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key)
-ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
-ALL_POSSIBLE_GOAL = (GoalState.green_goal)
+#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+ALL_POSSIBLE_WOLRD = (WorldSate.open_door1, WorldSate.closed_door1, WorldSate.open_door2, WorldSate.closed_door2)
+ALL_POSSIBLE_GOAL = (GoalState.green_goal, GoalState.red_goal)
 
 class AssistiveAgent:
     def __init__(
@@ -20,6 +21,9 @@ class AssistiveAgent:
         self.closed = False
         self.gamma = 0.99
         self.threshold = 1e-6
+        self.track_belief = {}
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
 
     def step(self, action: ActionsAgent2):
         #_ , reward, terminated, truncated, _ = self.env.step(action)
@@ -37,35 +41,88 @@ class AssistiveAgent:
         #else:
         self.env.render()
     
-    def value_iteration(self,p_action):
+    def initializeJ_Q(self, g=GoalState.green_goal, all_goal=False):
         states = self.env.get_all_states()
-        Q_prime= {}
+        Q= {}
         J = {}
+        big_change ={}
+        if not all_goal:
+        #for g in ALL_POSSIBLE_GOAL:
+            for w in ALL_POSSIBLE_WOLRD:
+                Q[w] = {}
+                J[w] = {}
+                big_change[w] = 0
+                for s in states:
+                    self.env.set_state(s)
+                    J[w][s]= {}
+                    Q[w][s] = {}
+                    J[w][s][g] = 0
+                    Q[w][s][g] = {}
+                    for a in ALL_POSSIBLE_ACTIONS_2:
+                        Q[w][s][g][a] = 0
+        else:
+            for w in ALL_POSSIBLE_WOLRD:
+                Q[w] = {}
+                J[w] = {}
+                big_change[w] = 0
+                for s in states:
+                    self.env.set_state(s)
+                    J[w][s]= {}
+                    Q[w][s] = {}
+                    for g in ALL_POSSIBLE_GOAL:
+                        big_change[w][g] = 0
+                        J[w][s][g] = 0
+                        Q[w][s][g] = {}
+                    for a in ALL_POSSIBLE_ACTIONS_2:
+                        Q[w][s][g][a] = 0
+        return J, Q, states, big_change
+    
+    def initialize_variation(self, all_goal=False):
         big_change = {}
         for w in ALL_POSSIBLE_WOLRD:
-            Q_prime[w] = {}
-            J[w] = {}
-            for s in states:
-                J[w][s]= {}
-                Q_prime[w][s] = {}
-                g = GoalState.green_goal
-                J[w][s][g] = 0
-                Q_prime[w][s][g] = {}
-                for a in ALL_POSSIBLE_ACTIONS_2:
-                    Q_prime[w][s][g][a] = 0
+            big_change[w] = 0
+            if all_goal:
+                big_change[w] = {}
+                for g in GoalState:
+                    big_change[w][g] = 0
+        return big_change 
+    
+    def variation_superiorTothreshold(self, variation, all_goal=False):
+        breaking_flag = True
+        if not all_goal:
+            for w in ALL_POSSIBLE_WOLRD:
+                if variation[w] <= self.threshold:
+                    breaking_flag = True * breaking_flag
+                else:
+                    breaking_flag = False * breaking_flag
+        else:
+            for g in ALL_POSSIBLE_GOAL:
+                for w in ALL_POSSIBLE_WOLRD:
+                    if variation[w][g] <= self.threshold:
+                        breaking_flag = True * breaking_flag
+                    else:
+                        breaking_flag = False * breaking_flag
+        return breaking_flag
+    
+    def world_dynamic_update(self, action, current_world):
+        if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
+            world_prime = WorldSate.open_door
+        if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
+            world_prime = WorldSate.open_door
+        if action == ActionsAgent2.nothing:
+            world_prime = current_world
+        return world_prime
+    
+    def value_iteration(self, p_action, g=GoalState.green_goal):
+        J, Q_prime, states, big_change = self.initializeJ_Q()
         while True:
-            big_change[WorldSate.open_door] = 0
-            big_change[WorldSate.closed_door] = 0
+            big_change = self.initialize_variation()
             old_J = J
-            g = GoalState.green_goal
             for w in ALL_POSSIBLE_WOLRD:
                 # open the door in Value iteration
                 self.env.open_door_manually(w)
-                #print(w)     
                 for s in self.env.get_states_non_terminated():
                     self.env.set_state(s)
-                    #print(s)
-                    #print(self.env.get_possible_move(s))
                     temp = J[w][s][g]
                     for a_2 in ALL_POSSIBLE_ACTIONS_2:
                         #transitions = self.env.get_transition_probs(a, cost_value=1)
@@ -79,15 +136,8 @@ class AssistiveAgent:
                         for a_1 in self.env.get_possible_move(s):
                             transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
                             #print(p_action[w][s][g][a_1])
-                            for (prob, r, world_prime, state_prime) in transitions:
-                                if a_2 == ActionsAgent2.take_key and w == WorldSate.closed_door :
-                                    world_prime = WorldSate.open_door
-                                if a_2 == ActionsAgent2.take_key and w == WorldSate.open_door :
-                                    world_prime = WorldSate.open_door
-                                if a_2 == ActionsAgent2.nothing:
-                                    world_prime = w
-                                #print(world_prime)
-                                
+                            for (prob, r, state_prime) in transitions:
+                                world_prime = self.world_dynamic_update(a_2, w)
                                        
                                 reward = prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                                 next_state_reward.append(reward)
@@ -95,12 +145,13 @@ class AssistiveAgent:
                         self.env.check_move(action=a_2, w=w)
                             
                         Q_prime[w][s][g][a_2]=((np.sum(next_state_reward))+ self.env.get_reward_2(a_2))
+                        
                     J[w][s][g] = max(Q_prime[w][s][g].values())
                     big_change[w] = max(big_change[w], np.abs(temp-J[w][s][g]))
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
                       
-            if big_change[WorldSate.closed_door] <= self.threshold and big_change[WorldSate.open_door] <= self.threshold:
+            if self.variation_superiorTothreshold(big_change):
                 break
         return J, Q_prime
     
@@ -185,6 +236,24 @@ class AssistiveAgent:
             policy[s] = best_a
         return policy
 """
+    
+    def belief_state(self,previous_dist_g, dist_boltzmann, w, s):
+        # be carful of dynamic of w that needs the action of agent 2
+        current_dist = np.copy(previous_dist_g)
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            conditional_state_world = 0
+            for a in self.env.get_possible_move(s):
+                conditional_state_world += dist_boltzmann[w][s][ALL_POSSIBLE_GOAL[i]][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+        normalizing_factor += conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+        
+        current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        
+        return current_dist
+              
+         
+    
     def deduce_policy(self, J, p_action):
         policy = {}
         g= GoalState.green_goal
@@ -198,19 +267,15 @@ class AssistiveAgent:
             # open the door in Value iteration
             self.env.open_door_manually(w)
             for s in self.env.get_states_non_terminated():
-                self.env.set_state(s) 
+                self.env.set_state(s)
+                
                 Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS_2))
                 for action in ALL_POSSIBLE_ACTIONS_2 :
                     self.env.check_move(action=action, w=w)
                     for a_1 in self.env.get_possible_move(s):
                         transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
-                        for (prob, r, world_prime, state_prime) in transitions:
-                            if action == ActionsAgent2.take_key and w == WorldSate.closed_door :
-                                world_prime = WorldSate.open_door
-                            if action == ActionsAgent2.take_key and w == WorldSate.open_door :
-                                world_prime = WorldSate.open_door
-                            if action == ActionsAgent2.nothing:
-                                world_prime = w
+                        for (prob, r, state_prime) in transitions:
+                            world_prime = self.world_dynamic_update(action, w)
                             Q_table[int(action)] += prob*(p_action[world_prime][s][g][a_1]*r + self.gamma* p_action[world_prime][s][g][a_1]*J[world_prime][state_prime][g])
                     # put back the door
                     self.env.check_move(action=action, w=w)

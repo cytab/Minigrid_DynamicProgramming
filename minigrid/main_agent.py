@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-
+import json
 import gymnasium as gym
 import pygame
 import pprint
@@ -14,10 +14,25 @@ from minigrid.minigrid_env import MiniGridEnv
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper
 from minigrid.Agent_2 import AssistiveAgent
 
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation 
+
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
-#ALL_POSSIBLE_WOLRD = (WorldSate.open_door1, WorldSate.closed_door1, WorldSate.open_door2, WorldSate.closed_door2)
+#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+
+plt.style.use('fivethirtyeight')
+
+belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+def animate(i):
+    plt.cla()
+    plt.plot(belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], belief_State_Tracker[ALL_POSSIBLE_GOAL[1]])
+    
+ani = FuncAnimation(plt.gcf(), animate, interval=1000)
+# plt.tight_layout()
+# plt.show()
 class MainAgent:
     def __init__(
         self,
@@ -31,67 +46,72 @@ class MainAgent:
         self.threshold = 1e-6   
 
     def start(self, agent: AssistiveAgent):
-        N = 1000
-        miinimum_step = 50
-        count_sucess = 0 
-        for i in range(N):
-            """Start the window display with blocking event loop"""
-            self.reset(self.seed)
-            current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-            J, Q = self.value_iteration()
-            #pprint.PrettyPrinter(width=20).pprint(Q)
-            print("-------------------------")
-
-            # Determine initial policy
-            dist = self.boltzmann_policy(Q,eta=3)
-            #pprint.PrettyPrinter(width=20).pprint(dist)
-            #print("-------------------------")
+        #N = 1000
+        #miinimum_step = 50
+        #count_sucess = 0 
+        #for i in range(N):
+        """Start the window display with blocking event loop"""
+        self.reset(self.seed)
+        current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+        J, Q = self.value_iteration_multiple_goal()
+        policy = self.deduce_policy(J)
+        ##J, Q = self.value_iteration()
+        pprint.PrettyPrinter(width=20).pprint(Q)
+        print("-------------------------")
+        f = open('file.txt', 'w')
+        f.write(str(Q))
+        f.close()
+        # Determine initial policy
+        #dist = self.boltzmann_policy(Q,eta=3)
+        #pprint.PrettyPrinter(width=20).pprint(dist)
+        #print("-------------------------")
+        #J2, Q2 = agent_2.value_iteration(dist)
+        #pprint.PrettyPrinter(width=20).pprint(Q2)
+            # deduce the actual optimal policy
+        #policy_agent2 = agent_2.deduce_policy(J2, dist)
+        #pprint.PrettyPrinter(width=20).pprint(policy_agent2)
+        step = 0
+        """while True:
+            # get world state
+            current_world = self.env.get_world_state()
+            #print("State of current world: ")
+            #print(current_world)
+            
+            #current agent goal 
+            g = GoalState.green_goal
+            #resolve dynamic programming of agent 2
             J2, Q2 = agent_2.value_iteration(dist)
             #pprint.PrettyPrinter(width=20).pprint(Q2)
-                # deduce the actual optimal policy
+            # deduce the actual optimal policy
             policy_agent2 = agent_2.deduce_policy(J2, dist)
-            #pprint.PrettyPrinter(width=20).pprint(policy_agent2)
-            step = 0
-            while True:
-                # get world state
-                current_world = self.env.get_world_state()
-                #print("State of current world: ")
-                #print(current_world)
-                
-                #current agent goal 
-                g = GoalState.green_goal
-                #resolve dynamic programming of agent 2
-                J2, Q2 = agent_2.value_iteration(dist)
-                #pprint.PrettyPrinter(width=20).pprint(Q2)
-                # deduce the actual optimal policy
-                policy_agent2 = agent_2.deduce_policy(J2, dist)
-                
-                #take agent 2 action in the world
-                #print("Action taken by agent 2 : ")
-                #print(policy_agent2[current_world][current_agent_pose][g])
-                agent_2.step(policy_agent2[current_world][current_agent_pose][g])
             
-                #recalculate Q function of agent 1
-                J, Q = self.value_iteration()
+            #take agent 2 action in the world
+            #print("Action taken by agent 2 : ")
+            #print(policy_agent2[current_world][current_agent_pose][g])
+            agent_2.step(policy_agent2[current_world][current_agent_pose][g])
+        
+            #recalculate Q function of agent 1
+            J, Q = self.value_iteration()
+        
+            #new distribution of action of agent 1 
+            dist = self.boltzmann_policy(Q=Q, eta=3)
             
-                #new distribution of action of agent 1 
-                dist = self.boltzmann_policy(Q=Q, eta=3)
-                
-                # generate an action from distribution
-                action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=GoalState.green_goal,dist=dist))
-            
-                # take agent 1 action in the world
-                terminated = self.step(action)
-            
-                # update agent pose
-                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-                if terminated:
-                    count_sucess = count_sucess + 1
-                    break
-                step = step + 1
+            # generate an action from distribution
+            action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=GoalState.green_goal,dist=dist))
+        
+            # take agent 1 action in the world
+            terminated = self.step(action)
+        
+            # update agent pose
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+            if terminated:
+                count_sucess = count_sucess + 1
+                break
+            step = step + 1
              
         print("---------------------------------------- Sucess rate -------------------------------------")
         print(count_sucess/N)
+        """
 
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -153,8 +173,7 @@ class MainAgent:
                     Q[w][s][ALL_POSSIBLE_GOAL[i]] = {}
                 for a in self.env.get_possible_move(s):
                     Q[w][s][ALL_POSSIBLE_GOAL[i]][a] = 0
-        return J, Q, states, big_change
-  
+        return J, Q, states, big_change 
     
     def bellman_equation(self,J, g, w, a, s):
         next_state_reward = []
@@ -212,6 +231,8 @@ class MainAgent:
         return J, Q
    
     def value_iteration_multiple_goal(self):
+        # set by default
+        self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q()
         while True:
             big_change = self.initialize_variation()
@@ -235,9 +256,7 @@ class MainAgent:
                     self.env.open_door_manually(w)
             if self.variation_superiorTothreshold(big_change):
                 break
-        return J,Q
-                    
-        
+        return J,Q      
        
     """
     def calculate_values(self, Q=False):# NOT UPDATED WITH WORLD AND GOAL STATE
@@ -300,16 +319,19 @@ class MainAgent:
             policy[s] = best_a
         return policy
     """
+    
     def deduce_policy(self, J):
         policy = {}
-        g= GoalState.green_goal
-        for w in ALL_POSSIBLE_WOLRD:
-            policy[w] = {}
-            for s in self.env.get_states_non_terminated():
-                policy[w][s] = {}
-                policy[w][s][g] = np.random.choice(ALL_POSSIBLE_ACTIONS)
+        self.env.set_env_to_goal(GoalState.green_goal)
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            for w in ALL_POSSIBLE_WOLRD:
+                policy[w] = {}
+                for s in self.env.get_states_non_terminated():
+                    policy[w][s] = {}
+                    policy[w][s][ALL_POSSIBLE_GOAL[i]] = np.random.choice(ALL_POSSIBLE_ACTIONS)
 
         for i in range(len(ALL_POSSIBLE_GOAL)):
+            self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
             for w in ALL_POSSIBLE_WOLRD:
                 # open the door in Value iteration
                 self.env.open_door_manually(w)
@@ -323,8 +345,7 @@ class MainAgent:
                     policy[w][s][ALL_POSSIBLE_GOAL[i]] = ActionsReduced(np.argmax(Q_table))
                 self.env.open_door_manually(w)
         return policy                   
-                
-        
+                  
     #output the distribution over action in all state of agent 1
     def boltzmann_policy(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
@@ -360,9 +381,7 @@ class MainAgent:
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
             return dist
-    
-            
-    
+       
     def generate_action(self, state, worldState, goal, dist):
         possible_action = [a for a in dist[worldState][state][goal].keys()]
         prob = [dist[worldState][state][goal][a] for a in dist[worldState][state][goal].keys()]
@@ -379,7 +398,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-8x8-v0",
+        default="MiniGrid-Empty-Reduced-16x16-v0",
     )
     parser.add_argument(
         "--seed",

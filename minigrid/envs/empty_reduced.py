@@ -97,7 +97,7 @@ class EmptyReducedEnv(MiniGridEnv):
         agent_start_dir=0,
         max_steps: int | None = None,
         door=True,
-        multiple_goal=False,
+        multiple_goal=True,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -138,16 +138,16 @@ class EmptyReducedEnv(MiniGridEnv):
             for j in range(1, self.size-1):
                 #if self.grid.get(*(i,j)).type == "wall":
                 #    break
-                if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
-                    break
-#                elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
- #                   break
-                else:
+                #if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
+                #    break
+                #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
+                #    break
+                #else:
                     s.append((i,j))
         return s
     
     def get_all_states(self):
-        return self.get_states_non_terminated(all=True)
+        return self.get_states_non_terminated(all=False)
     
     def obstacle_pos(self, agent_pos):
         # get if there are obstacle around the agent : up , below, on right, on left
@@ -165,12 +165,22 @@ class EmptyReducedEnv(MiniGridEnv):
         for index, case in enumerate(cell):
         #check forward future pose
             if case is not None:
-                if (case.type == "door" and self.target_door[(self.splitIdx, self.doorIdx)]):
-                    obstacle[index] = 1
-                elif case.type == "wall":
-                    obstacle[index] = 1
-                elif case.type == "door" and not self.target_door[(self.splitIdx, self.doorIdx)]:
-                    obstacle[index] = 0
+                if not self.multiple_goal:
+                    if (case.type == "door" and self.target_door[(self.splitIdx, self.doorIdx)]):
+                        obstacle[index] = 1
+                    elif case.type == "wall":
+                        obstacle[index] = 1
+                    elif case.type == "door" and not self.target_door[(self.splitIdx, self.doorIdx)]:
+                        obstacle[index] = 0
+                else:
+                    
+                    if (case.type == "door"):
+                        if self.target_door[case.cur_pos]:
+                            obstacle[index] = 1
+                        else:
+                            obstacle[index] = 0
+                    elif case.type == "wall":
+                        obstacle[index] = 1
         return obstacle
     
     def get_possible_move(self, pose=0):
@@ -220,7 +230,7 @@ class EmptyReducedEnv(MiniGridEnv):
 
         return r
     
-    def check_move(self, action, w=WorldSate.open_door, cost_value=0):
+    def check_move(self, action, w, cost_value=0):
         # check if legal move first
         i = self.i
         j = self.j
@@ -257,7 +267,22 @@ class EmptyReducedEnv(MiniGridEnv):
                 elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
                     pass
             else:
-                pass ## add handling more action 
+                if action == ActionsAgent2.nothing:
+                    pass
+                if action == ActionsAgent2.take_key1 and w[0] is WorldSate.closed_door1:
+                    if self.target_door[self.rooms[0].doorPos]:
+                        self.target_door[self.rooms[0].doorPos] = False
+                    else:
+                        self.target_door[self.rooms[0].doorPos] = True
+                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.open_door:
+                    pass
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.closed_door:
+                    if self.target_door[self.rooms[1].doorPos]:
+                        self.target_door[self.rooms[1].doorPos] = False
+                    else:
+                        self.target_door[self.rooms[1].doorPos] = True
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.open_door:
+                    pass
                 
                 
                 
@@ -275,18 +300,14 @@ class EmptyReducedEnv(MiniGridEnv):
                     else:
                         pass
         else: 
-            if worldState == WorldSate.closed_door1 or worldState == WorldSate.closed_door2:
+            if worldState[0] == WorldSate.closed_door1 or worldState[1] == WorldSate.closed_door2:
                 pass
-            elif worldState == WorldSate.open_door1:
-                if self.target_door[self.rooms[0].doorPos]:
-                    self.target_door[self.rooms[0].doorPos] = False
-                else:
-                    self.target_door[self.rooms[0].doorPos] = True
-            elif worldState == WorldSate.open_door2:
-                if self.target_door[self.rooms[0].doorPos]:
-                    self.target_door[self.rooms[0].doorPos] = False
-                else:
-                    self.target_door[self.rooms[0].doorPos] = True
+            for i in range(len(worldState)):
+                if worldState[i] == WorldSate.open_door1:
+                    if self.target_door[self.rooms[i].doorPos]:
+                        self.target_door[self.rooms[i].doorPos] = False
+                    else:
+                        self.target_door[self.rooms[i].doorPos] = True
         
     def get_world_state(self):
         #return simply if the door is open (case none) or close (case door)
@@ -305,13 +326,13 @@ class EmptyReducedEnv(MiniGridEnv):
         
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []
-        next_state, reward = self.check_move(action=action, cost_value=cost_value)
+        next_state, reward = self.check_move(action=action, w=None, cost_value=cost_value)
         probs.append((self.obey_prob, reward, next_state))
         return probs
     
     def get_transition_probsA2(self, w, action=None, cost_value=0):
         probs = []
-        next_state, reward = self.check_move(action=action, cost_value=cost_value)
+        next_state, reward = self.check_move(action=action, w=w, cost_value=cost_value)
         probs.append((self.obey_prob, reward, next_state))
         return probs
 
@@ -386,7 +407,12 @@ class EmptyReducedEnv(MiniGridEnv):
                 self.target_door[((rWallIdx, j + 4))] = True
                 self.put_obj(Door("yellow", is_locked=True), rWallIdx, j+4)
                 goalPos = self.rooms[n].rand_pos(self)
-                self.grid.set(*goalPos, Goal())
+                if n == 1: 
+                    goal = Goal()
+                    goal.change_color("red")
+                    self.grid.set(*goalPos, goal)
+                else:
+                    self.grid.set(*goalPos, Goal())
                 self.goal_.append(np.array([*goalPos]))
             
             

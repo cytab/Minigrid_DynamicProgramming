@@ -31,17 +31,18 @@ class ActionsReduced(IntEnum):
 class ActionsAgent2(IntEnum):
     nothing = 0
     take_key = 1
+    take_key1 = 2
+    take_key2 = 3
+        
 
 
 class WorldSate(IntEnum):
-    if Number_room == 1:
-        open_door = 0
-        closed_door = 1
-    elif Number_room == 2:
-        open_door1 = 0
-        closed_door1 = 1
-        open_door2 = 2
-        closed_door2 = 3
+    open_door = 0
+    closed_door = 1
+    open_door1 = 2
+    closed_door1 = 3
+    open_door2 = 4
+    closed_door2 = 5
         
         
 class GoalState(IntEnum):

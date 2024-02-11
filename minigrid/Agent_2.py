@@ -7,7 +7,7 @@ from minigrid.core.world_object import Wall
 ALL_POSSIBLE_ACTIONS_1 = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
-ALL_POSSIBLE_WOLRD = (WorldSate.open_door1, WorldSate.closed_door1, WorldSate.open_door2, WorldSate.closed_door2)
+ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal, GoalState.red_goal)
 
 class AssistiveAgent:
@@ -32,6 +32,10 @@ class AssistiveAgent:
             self.env.grid.set(self.env.splitIdx, self.env.doorIdx, None)
         elif action == ActionsAgent2.nothing:
             pass
+        if action == ActionsAgent2.take_key1:
+            self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
+        elif action == ActionsAgent2.take_key2:
+            self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         #if terminated:
         #    print("terminated!")
         #    self.reset(self.seed)

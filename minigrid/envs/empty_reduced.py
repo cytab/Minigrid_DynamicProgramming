@@ -303,7 +303,7 @@ class EmptyReducedEnv(MiniGridEnv):
             if worldState[0] == WorldSate.closed_door1 or worldState[1] == WorldSate.closed_door2:
                 pass
             for i in range(len(worldState)):
-                if worldState[i] == WorldSate.open_door1:
+                if worldState[i] == WorldSate.open_door1 or worldState[i] == WorldSate.open_door2:
                     if self.target_door[self.rooms[i].doorPos]:
                         self.target_door[self.rooms[i].doorPos] = False
                     else:
@@ -314,14 +314,14 @@ class EmptyReducedEnv(MiniGridEnv):
         if not self.multiple_goal:
             return  WorldSate.open_door if self.grid.get(*(self.splitIdx,self.doorIdx)) is None else WorldSate.closed_door
         else:
-            world_state = (WorldSate.closed_door1, WorldSate.closed_door2)
+            world_state = [WorldSate.closed_door1, WorldSate.closed_door2]
             for i, room in enumerate(self.rooms):
                 if self.grid.get(*room.doorPos) is None and i == 0:
                     world_state[i] = WorldSate.open_door1
                 if self.grid.get(*room.doorPos) is None and i == 1:
                     world_state[i] = WorldSate.open_door2
         
-            return world_state 
+            return tuple(world_state) 
                 
         
     def get_transition_probs(self, action=None, cost_value=0):

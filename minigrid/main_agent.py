@@ -33,6 +33,9 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s):
         for i in range(len(ALL_POSSIBLE_GOAL)):
             conditional_state_world = 0
             for a in env.get_possible_move(s):
+                #transition = env.get_transition_probs(a, cost_value=1)
+                #for (_,_,state_prime) in transition:
+                #    if 
                 conditional_state_world += dist_boltzmann[w][s][ALL_POSSIBLE_GOAL[i]][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
@@ -67,7 +70,7 @@ class MainAgent:
         self.seed = seed
         self.closed = False
         self.gamma = 0.99
-        self.threshold = 1e-6   
+        self.threshold = 1e-4   
 
     def start(self, agent: AssistiveAgent):
         #N = 1000
@@ -79,6 +82,12 @@ class MainAgent:
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         
         initial_time = time.time()
+        # lorsqu'il n'y a pas l'operateur max on a :
+            # une boucle de calcul complet dure maximum 0.41 s
+            # nombre iteraation 1439
+        # lorsqu'il y a  l'operateur max on a :
+            # une boucle de calcul complet dure maximum 0.42 s
+            # nombre iteration 1444
         J, Q = self.value_iteration_multiple_goal()
         value_iteration_elapsed_time = initial_time - time.time()
         print('Elpased time for value iteration with multiple goal:')
@@ -295,7 +304,7 @@ class MainAgent:
                                               
                     J[w][s][g] = max(Q[w][s][g].values())
                 
-                    big_change[w][g] = max(big_change[w][g], np.abs(temp-J[w][s][g]))
+                    big_change[w][g] = np.abs(temp-J[w][s][g])
                     # close the door
                 self.env.open_door_manually(w)    
             if self.variation_superiorTothreshold(big_change):
@@ -306,12 +315,15 @@ class MainAgent:
         # set by default
         self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q()
+        number_iter = 0
         while True:
             big_change = self.initialize_variation()
+            intial_time = time.time()
             for g in ALL_POSSIBLE_GOAL:
                 self.env.set_env_to_goal(g)
                 for w in ALL_POSSIBLE_WOLRD:
                     self.env.open_door_manually(w)
+                    
                     for s in self.env.get_states_non_terminated():
                         self.env.set_state(s)
                         # open the door in Value iteration
@@ -323,11 +335,17 @@ class MainAgent:
                         
                         J[w][s][g] = max(Q[w][s][g].values())
                 
-                        big_change[w][g] = max(big_change[w][g], np.abs(temp-J[w][s][g]))
+                        big_change[w][g] = max(big_change[w][g], np.abs(temp-J[w][s][g])) 
+                        
                         #close the door
                     self.env.open_door_manually(w)
+            
             if self.variation_superiorTothreshold(big_change):
                 break
+            number_iter += 1
+            present_time = time.time() - intial_time
+            print(present_time)
+        print(number_iter)
         return J,Q      
        
     """

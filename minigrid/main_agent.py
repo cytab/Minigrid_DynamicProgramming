@@ -22,26 +22,27 @@ ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduce
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+#ALL_POSSIBLE_GOAL = (GoalState.green_goal)
 
 
-
-def belief_state(env, previous_dist_g, dist_boltzmann, w, s):
+def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
         current_dist = previous_dist_g
         normalizing_factor = 0
-        print(current_dist[ALL_POSSIBLE_GOAL[0]])
+        print(normalizing_factor)
         for i in range(len(ALL_POSSIBLE_GOAL)):
             conditional_state_world = 0
-            for a in env.get_possible_move(s):
-                #transition = env.get_transition_probs(a, cost_value=1)
-                #for (_,_,state_prime) in transition:
-                #    if 
-                conditional_state_world += dist_boltzmann[w][s][ALL_POSSIBLE_GOAL[i]][a]
+            env.set_state(previous_state)
+            for a in env.get_possible_move(previous_state):
+                transition = env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[w][previous_state][ALL_POSSIBLE_GOAL[i]][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
-            normalizing_factor += conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
-        
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+            
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
-        
         return current_dist
 
 plt.style.use('fivethirtyeight')
@@ -49,8 +50,8 @@ step = []
 belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
 def animate(i):
     plt.cla()
-    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
-    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
+    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
+    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color='red')
     
     plt.legend(loc='upper left')
     plt.tight_layout()
@@ -71,7 +72,13 @@ class MainAgent:
         self.closed = False
         self.gamma = 0.99
         self.threshold = 1e-4   
-
+        self.status = dict()
+        
+        for w in ALL_POSSIBLE_WOLRD:
+            self.status[w] = {}
+            for i in range(len(ALL_POSSIBLE_GOAL)):
+                self.status[w][ALL_POSSIBLE_GOAL[i]] = False
+        
     def start(self, agent: AssistiveAgent):
         #N = 1000
         #miinimum_step = 50
@@ -80,13 +87,12 @@ class MainAgent:
         """Start the window display with blocking event loop"""
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-        
         initial_time = time.time()
         # lorsqu'il n'y a pas l'operateur max on a :
-            # une boucle de calcul complet dure maximum 0.41 s
+            # une boucle de calcul complet dure maximum 0.41 s 0.12s (home pc)
             # nombre iteraation 1439
         # lorsqu'il y a  l'operateur max on a :
-            # une boucle de calcul complet dure maximum 0.42 s
+            # une boucle de calcul complet dure maximum 0.42 s 0.132 (home pc)
             # nombre iteration 1444
         J, Q = self.value_iteration_multiple_goal()
         value_iteration_elapsed_time = initial_time - time.time()
@@ -110,7 +116,7 @@ class MainAgent:
         
         
         # Determine initial policy
-        dist = self.boltzmann_policy_multiple_goal(Q,eta=6)
+        dist = self.boltzmann_policy_multiple_goal(Q,eta=8)
         ###   --- T = 
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
@@ -119,6 +125,7 @@ class MainAgent:
             # deduce the actual optimal policy
         #policy_agent2 = agent_2.deduce_policy(J2, dist)
         #pprint.PrettyPrinter(width=20).pprint(policy_agent2)
+        previous_State = None
         prior = {ALL_POSSIBLE_GOAL[0]: 0.5, ALL_POSSIBLE_GOAL[1]: 0.5}
         belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
         belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
@@ -130,24 +137,27 @@ class MainAgent:
         self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None) 
         while True:
             plt.ion()
+            previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
             current_world = self.env.get_world_state()
-            print(current_world)
-            g = GoalState.red_goal
-            belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose)
+            g = GoalState.green_goal
             
             action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
             terminated = self.step(action)
+            
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
             if terminated or step[-1] == 500:
                 break
             count += 1
+            
             step.append(count)
+            belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+
             belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
             belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
             animate(i=1)
             # update agent pose
-            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+            
             prior = belief
-
         plt.ioff()
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
@@ -281,6 +291,7 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 if variation[w][ALL_POSSIBLE_GOAL[i]] <= self.threshold:
                     breaking_flag = True * breaking_flag
+                    self.status[w][ALL_POSSIBLE_GOAL[i]] =True
                 else:
                     breaking_flag = False * breaking_flag
         return breaking_flag
@@ -310,20 +321,29 @@ class MainAgent:
             if self.variation_superiorTothreshold(big_change):
                 break
         return J, Q
+
+    def check_status(self):
+        flag =True
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            for w in ALL_POSSIBLE_WOLRD:
+                flag = flag*self.status[w][ALL_POSSIBLE_GOAL[i]]
+        return flag
        
     def value_iteration_multiple_goal(self):
         # set by default
         self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q()
         number_iter = 0
+        
         while True:
             big_change = self.initialize_variation()
+            
             intial_time = time.time()
             for g in ALL_POSSIBLE_GOAL:
                 self.env.set_env_to_goal(g)
                 for w in ALL_POSSIBLE_WOLRD:
                     self.env.open_door_manually(w)
-                    
+                    #if self.status[w][g] is False: # we only update the value iteration for value function that didn't converge yet
                     for s in self.env.get_states_non_terminated():
                         self.env.set_state(s)
                         # open the door in Value iteration
@@ -335,16 +355,15 @@ class MainAgent:
                         
                         J[w][s][g] = max(Q[w][s][g].values())
                 
-                        big_change[w][g] = max(big_change[w][g], np.abs(temp-J[w][s][g])) 
-                        
+                        big_change[w][g] = np.abs(temp-J[w][s][g])
+                            
                         #close the door
+                        
                     self.env.open_door_manually(w)
-            
             if self.variation_superiorTothreshold(big_change):
                 break
             number_iter += 1
-            present_time = time.time() - intial_time
-            print(present_time)
+            
         print(number_iter)
         return J,Q      
        

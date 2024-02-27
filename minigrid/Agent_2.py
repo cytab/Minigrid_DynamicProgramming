@@ -5,11 +5,13 @@ from gymnasium import Env
 from minigrid.core.world_object import Wall
 
 ALL_POSSIBLE_ACTIONS_1 = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key)
+#ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key)
+ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key1, ActionsAgent2.take_key2)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
-ALL_POSSIBLE_GOAL = (GoalState.green_goal, GoalState.red_goal)
 
+ALL_POSSIBLE_GOAL = (GoalState.green_goal, GoalState.red_goal)
+#ALL_POSSIBLE_GOAL = (GoalState.green_goal)
 class AssistiveAgent:
     def __init__(
         self,
@@ -24,6 +26,8 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
+        discretize_num = 10
+        self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
 
     def step(self, action: ActionsAgent2):
         #_ , reward, terminated, truncated, _ = self.env.step(action)
@@ -45,76 +49,60 @@ class AssistiveAgent:
         #else:
         self.env.render()
     
-    def initializeJ_Q(self, g=GoalState.green_goal, all_goal=False):
+    def initializeJ_Q(self, g=GoalState.green_goal):
         states = self.env.get_all_states()
         Q= {}
         J = {}
         big_change ={}
-        if not all_goal:
-        #for g in ALL_POSSIBLE_GOAL:
+        for belief in self.discretize_belief:
+            Q[belief] = {}
+            J[belief] = {}
+            big_change[belief] = {}
             for w in ALL_POSSIBLE_WOLRD:
-                Q[w] = {}
-                J[w] = {}
-                big_change[w] = 0
+                Q[belief][w] = {}
+                J[belief][w] = {}
+                big_change[belief][w] = 0
                 for s in states:
                     self.env.set_state(s)
-                    J[w][s]= {}
-                    Q[w][s] = {}
-                    J[w][s][g] = 0
-                    Q[w][s][g] = {}
-                    for a in ALL_POSSIBLE_ACTIONS_2:
-                        Q[w][s][g][a] = 0
-        else:
-            for w in ALL_POSSIBLE_WOLRD:
-                Q[w] = {}
-                J[w] = {}
-                big_change[w] = 0
-                for s in states:
-                    self.env.set_state(s)
-                    J[w][s]= {}
-                    Q[w][s] = {}
-                    for g in ALL_POSSIBLE_GOAL:
-                        big_change[w][g] = 0
-                        J[w][s][g] = 0
-                        Q[w][s][g] = {}
-                    for a in ALL_POSSIBLE_ACTIONS_2:
-                        Q[w][s][g][a] = 0
-        return J, Q, states, big_change
+                    J[belief][w][s]= 0
+                    Q[belief][w][s] = {}
+                    for a in self.env.get_possible_move(s):
+                        Q[belief][w][s][a] = 0
+        return J, Q, states, big_change 
     
-    def initialize_variation(self, all_goal=False):
+    def initialize_variation(self):
         big_change = {}
-        for w in ALL_POSSIBLE_WOLRD:
-            big_change[w] = 0
-            if all_goal:
-                big_change[w] = {}
-                for g in GoalState:
-                    big_change[w][g] = 0
+        for belief in self.discretize_belief:
+            big_change[belief] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                big_change[belief][w] = 0
         return big_change 
     
-    def variation_superiorTothreshold(self, variation, all_goal=False):
+    def variation_superiorTothreshold(self, variation):
         breaking_flag = True
-        if not all_goal:
+        for i in range(len(ALL_POSSIBLE_GOAL)):
             for w in ALL_POSSIBLE_WOLRD:
-                if variation[w] <= self.threshold:
+                if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
                     breaking_flag = True * breaking_flag
                 else:
                     breaking_flag = False * breaking_flag
-        else:
-            for g in ALL_POSSIBLE_GOAL:
-                for w in ALL_POSSIBLE_WOLRD:
-                    if variation[w][g] <= self.threshold:
-                        breaking_flag = True * breaking_flag
-                    else:
-                        breaking_flag = False * breaking_flag
         return breaking_flag
     
     def world_dynamic_update(self, action, current_world):
-        if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
-            world_prime = WorldSate.open_door
-        if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
-            world_prime = WorldSate.open_door
-        if action == ActionsAgent2.nothing:
-            world_prime = current_world
+        if not self.env.multiple_goal():
+            if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.nothing:
+                world_prime = current_world
+        else:
+            if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
+                world_prime = (WorldSate.open_door1, current_world[1])
+            if action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
+                world_prime = (current_world[0], WorldSate.open_door2)
+            if action == ActionsAgent2.nothing:
+                world_prime = current_world
         return world_prime
     
     def value_iteration(self, p_action, g=GoalState.green_goal):
@@ -159,6 +147,50 @@ class AssistiveAgent:
                 break
         return J, Q_prime
     
+    def expected_reward_over_goal(self, s,  belief_state, a):
+        expected = 0
+        for  i in range(len(ALL_POSSIBLE_GOAL)):
+            self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
+            r = self.env.get_reward_1(self, s[0], s[1], a, cost_value=-1)
+            expected += r*belief_state[ALL_POSSIBLE_GOAL[i]]
+        return expected
+    
+    def expected_prob_over_action(self, belief_state,  p_action, s, a, w):
+        expected = 0
+        for  i in range(len(ALL_POSSIBLE_GOAL)):
+            expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*belief_state[ALL_POSSIBLE_GOAL[i]]
+        return expected
+    
+    def value_iteration_baseline(self, p_action):
+        J, Q_prime, states, big_change = self.initializeJ_Q()
+        while True:
+            big_change = self.initialize_variation()
+            for belief in self.discretize_belief:
+                for w in ALL_POSSIBLE_WOLRD:
+                    self.env.open_door_manually(w)
+                    for s in self.env.get_states_non_terminated():
+                        self.env.set_state(s)
+                        temp = J[belief][w][s]
+                        for a_2 in ALL_POSSIBLE_ACTIONS_2:
+                            self.env.check_move(action=a_2, w=w)
+                            next_state_reward = []
+                            for a_1 in self.env.get_possible_move(s):
+                                transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
+                                for (prob, r, state_prime) in transitions:
+                                    world_prime = self.world_dynamic_update(a_2, w)
+                                    reward = prob*(self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=a_1,w=w)*self.expected_reward_over_goal(s=s,belief_state=belief, a=a_1) + self.gamma* J[belief][world_prime][state_prime])
+                                    next_state_reward.append(reward)
+                            # put back the door
+                            self.env.check_move(action=a_2, w=w)
+                            Q_prime[belief][w][s][a_2]=((np.sum(next_state_reward))+ self.env.get_reward_2(a_2))
+                        J[belief][w][s] = max(Q_prime[belief][w][s].values())
+                        big_change[belief][w] = max(big_change[belief][w], np.abs(temp-J[belief][w][s]))
+                    # CLOSE the door in Value iteration
+                    self.env.open_door_manually(w)
+            if self.variation_superiorTothreshold(big_change):
+                break
+        return J, Q_prime     
+                    
     """
     def best_action_value(self, J, s, p_action, Q=False):# NOT UPDATED WITH WORLD AND GOAL STATE
         best_a = None
@@ -241,19 +273,26 @@ class AssistiveAgent:
         return policy
 """
     
-    def belief_state(self,previous_dist_g, dist_boltzmann, w, s):
+    
+    
+    def belief_state(self, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
-        current_dist = np.copy(previous_dist_g)
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = previous_dist_g
         normalizing_factor = 0
+        print(normalizing_factor)
         for i in range(len(ALL_POSSIBLE_GOAL)):
             conditional_state_world = 0
-            for a in self.env.get_possible_move(s):
-                conditional_state_world += dist_boltzmann[w][s][ALL_POSSIBLE_GOAL[i]][a]
+            self.env.set_state(previous_state)
+            for a in self.env.get_possible_move(previous_state):
+                transition = self.env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[w][previous_state][ALL_POSSIBLE_GOAL[i]][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
-        normalizing_factor += conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
-        
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+            
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
-        
         return current_dist
               
          

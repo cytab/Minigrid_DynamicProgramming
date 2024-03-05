@@ -80,6 +80,7 @@ class AssistiveAgent:
     
     def variation_superiorTothreshold(self, variation):
         breaking_flag = True
+        
         for i in range(len(ALL_POSSIBLE_GOAL)):
             for w in ALL_POSSIBLE_WOLRD:
                 if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
@@ -89,7 +90,8 @@ class AssistiveAgent:
         return breaking_flag
     
     def world_dynamic_update(self, action, current_world):
-        if not self.env.multiple_goal():
+        world_prime = None
+        if not self.env.multiple_goal:
             if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
                 world_prime = WorldSate.open_door
             if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
@@ -102,6 +104,8 @@ class AssistiveAgent:
             if action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
                 world_prime = (current_world[0], WorldSate.open_door2)
             if action == ActionsAgent2.nothing:
+                world_prime = current_world
+            else:
                 world_prime = current_world
         return world_prime
     
@@ -147,22 +151,43 @@ class AssistiveAgent:
                 break
         return J, Q_prime
     
+    def approx_prob_to_belief(self, prob):
+        closest = min(self.discretize_belief, key=lambda y: abs(prob - y))
+        # Round or ceil the variable to the closest number
+        rounded_closest = round(closest)
+        
+        return rounded_closest
+    
     def expected_reward_over_goal(self, s,  belief_state, a):
         expected = 0
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief_state, ALL_POSSIBLE_GOAL[1]: 1-belief_state}
         for  i in range(len(ALL_POSSIBLE_GOAL)):
             self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
-            r = self.env.get_reward_1(self, s[0], s[1], a, cost_value=-1)
-            expected += r*belief_state[ALL_POSSIBLE_GOAL[i]]
+            r = self.env.get_reward_1(s[0], s[1], a, cost_value=-1)
+            expected += r*current_dist[ALL_POSSIBLE_GOAL[i]]
         return expected
     
     def expected_prob_over_action(self, belief_state,  p_action, s, a, w):
         expected = 0
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief_state, ALL_POSSIBLE_GOAL[1]: 1-belief_state}
         for  i in range(len(ALL_POSSIBLE_GOAL)):
-            expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*belief_state[ALL_POSSIBLE_GOAL[i]]
+            expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*current_dist[ALL_POSSIBLE_GOAL[i]]
         return expected
     
+    def bellman_equation(self, action2, action1, belief, w, s, p_action, J):
+        next_state_reward = []
+        transitions = self.env.get_transition_probsA2(w=w, action=action1, cost_value=1)
+        for (prob, r, state_prime) in transitions:
+            world_prime = self.world_dynamic_update(action2, w)
+            next_belief = self.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
+            next_belief = self.approx_prob_to_belief(next_belief)
+            reward = prob*(self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=action1,w=w)*self.expected_reward_over_goal(s=s,belief_state=belief, a=action1) + self.gamma* J[next_belief][world_prime][state_prime])
+            next_state_reward.append(reward)
+        return next_state_reward
+            
     def value_iteration_baseline(self, p_action):
         J, Q_prime, states, big_change = self.initializeJ_Q()
+        
         while True:
             big_change = self.initialize_variation()
             for belief in self.discretize_belief:
@@ -175,11 +200,7 @@ class AssistiveAgent:
                             self.env.check_move(action=a_2, w=w)
                             next_state_reward = []
                             for a_1 in self.env.get_possible_move(s):
-                                transitions = self.env.get_transition_probsA2(w=w, action=a_1, cost_value=1)
-                                for (prob, r, state_prime) in transitions:
-                                    world_prime = self.world_dynamic_update(a_2, w)
-                                    reward = prob*(self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=a_1,w=w)*self.expected_reward_over_goal(s=s,belief_state=belief, a=a_1) + self.gamma* J[belief][world_prime][state_prime])
-                                    next_state_reward.append(reward)
+                                next_state_reward = self.bellman_equation(a_2, a_1, belief, w, s, p_action, J)
                             # put back the door
                             self.env.check_move(action=a_2, w=w)
                             Q_prime[belief][w][s][a_2]=((np.sum(next_state_reward))+ self.env.get_reward_2(a_2))
@@ -273,7 +294,12 @@ class AssistiveAgent:
         return policy
 """
     
-    
+    def belief_state_discretize(self, belief, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief, ALL_POSSIBLE_GOAL[1]: 1-belief}
+        current_dist = self.belief_state(previous_dist_g=current_dist, dist_boltzmann=dist_boltzmann, w=w, s=s, previous_state=previous_state)
+        return current_dist[ALL_POSSIBLE_GOAL[0]]
     
     def belief_state(self, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
@@ -288,15 +314,13 @@ class AssistiveAgent:
                 transition = self.env.get_transition_probs(a, cost_value=1)
                 for (_,_,state_prime) in transition:
                     if state_prime == s:
-                        conditional_state_world += dist_boltzmann[w][previous_state][ALL_POSSIBLE_GOAL[i]][a]
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
             
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
               
-         
-    
     def deduce_policy(self, J, p_action):
         policy = {}
         g= GoalState.green_goal
@@ -326,6 +350,35 @@ class AssistiveAgent:
                 policy[w][s][g] = ActionsAgent2(np.argmax(Q_table))
             self.env.open_door_manually(w)
         return policy
+    
+    def deduce_policy_multiple_goal(self, J, p_action):
+        policy = {}
+        for belief in self.discretize_belief:
+            policy[belief] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                policy[belief][w] = {}
+                for s in self.env.get_states_non_terminated():
+                    policy[belief][w][s] =  np.random.choice(ALL_POSSIBLE_ACTIONS_2)
+                    
+        for belief in self.discretize_belief:
+            for w in  ALL_POSSIBLE_WOLRD:
+                # open the door in Value iteration
+                self.env.open_door_manually(w)
+                for s in self.env.get_states_non_terminated():
+                    self.env.set_state(s) 
+                    Q_table = np.zeros(len(ALL_POSSIBLE_ACTIONS_2))
+                    for action in ALL_POSSIBLE_ACTIONS_2 :
+                        self.env.check_move(action=action, w=w)
+                        for a_1 in self.env.get_possible_move(s):
+                            next_state_reward = self.bellman_equation(action2=action, action1=a_1, belief=belief, w=w, s=s, p_action=p_action, J=J)
+                        Q_table[int(action)] = np.sum(next_state_reward) 
+                        # put back the door
+                        self.env.check_move(action=action, w=w)
+                        Q_table[int(action)] += self.env.get_reward_2(action)
+                    policy[belief][w][s] = ActionsAgent2(np.argmax(Q_table))
+                self.env.open_door_manually(w)
+        return policy
+    
     
     def reset(self, seed=None):
         self.env.reset(seed=seed)

@@ -137,17 +137,17 @@ class EmptyReducedEnv(MiniGridEnv):
         for i in range(1, self.size -1) :
             for j in range(1, self.size-1):
                 #if self.grid.get(*(i,j)).type == "wall":
-                #    break
-                #if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
-                #    break
+                #    pass
+                if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
+                    pass
                 #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
                 #    break
-                #else:
+                else:
                     s.append((i,j))
         return s
     
     def get_all_states(self):
-        return self.get_states_non_terminated(all=False)
+        return self.get_states_non_terminated(all=True)
     
     def obstacle_pos(self, agent_pos):
         # get if there are obstacle around the agent : up , below, on right, on left
@@ -274,14 +274,14 @@ class EmptyReducedEnv(MiniGridEnv):
                         self.target_door[self.rooms[0].doorPos] = False
                     else:
                         self.target_door[self.rooms[0].doorPos] = True
-                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.open_door:
+                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.open_door1:
                     pass
-                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.closed_door:
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.closed_door2:
                     if self.target_door[self.rooms[1].doorPos]:
                         self.target_door[self.rooms[1].doorPos] = False
                     else:
                         self.target_door[self.rooms[1].doorPos] = True
-                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.open_door:
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.open_door2:
                     pass
                 
                 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 import pickle, time
 import gymnasium as gym
-import pygame
+import pygame, copy
 import pprint
 from gymnasium import Env
 from minigrid.core.grid import Grid
@@ -20,6 +20,7 @@ from matplotlib.animation import FuncAnimation
 
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+
 ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 #ALL_POSSIBLE_GOAL = (GoalState.green_goal)
@@ -30,7 +31,6 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
         #PROCESS ENVIRONEMENT IF POSSIBLE 
         current_dist = previous_dist_g
         normalizing_factor = 0
-        print(normalizing_factor)
         for i in range(len(ALL_POSSIBLE_GOAL)):
             conditional_state_world = 0
             env.set_state(previous_state)
@@ -38,7 +38,7 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
                 transition = env.get_transition_probs(a, cost_value=1)
                 for (_,_,state_prime) in transition:
                     if state_prime == s:
-                        conditional_state_world += dist_boltzmann[w][previous_state][ALL_POSSIBLE_GOAL[i]][a]
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
             
@@ -71,13 +71,13 @@ class MainAgent:
         self.seed = seed
         self.closed = False
         self.gamma = 0.99
-        self.threshold = 1e-4   
+        self.threshold = 1e-1   
         self.status = dict()
         
-        for w in ALL_POSSIBLE_WOLRD:
-            self.status[w] = {}
-            for i in range(len(ALL_POSSIBLE_GOAL)):
-                self.status[w][ALL_POSSIBLE_GOAL[i]] = False
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            self.status[ALL_POSSIBLE_GOAL[i]] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         
     def start(self, agent: AssistiveAgent):
         #N = 1000
@@ -111,16 +111,16 @@ class MainAgent:
         #file.close()
         #policy = self.deduce_policy(J)
         
-        ##J, Q = self.value_iteration()
+        #J, Q = self.value_iteration()
         #pprint.PrettyPrinter(width=20).pprint(Q)
         
         
         # Determine initial policy
-        dist = self.boltzmann_policy_multiple_goal(Q,eta=8)
+        dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
         ###   --- T = 
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
-        #J2, Q2 = agent_2.value_iteration(dist)
+        J2, Q2 = agent_2.value_iteration_baseline(dist)
         #pprint.PrettyPrinter(width=20).pprint(Q2)
             # deduce the actual optimal policy
         #policy_agent2 = agent_2.deduce_policy(J2, dist)
@@ -133,13 +133,14 @@ class MainAgent:
         step.append(count)
         #ani = FuncAnimation(plt.gcf(), animate, interval=60)
         #ani.save('growingCoil.mp4', writer = 'ffmpeg', fps = 30)
-        self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
-        self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None) 
+        #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
+        #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
+        ''' 
         while True:
             plt.ion()
             previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
             current_world = self.env.get_world_state()
-            g = GoalState.green_goal
+            g = GoalState.red_goal
             
             action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
             terminated = self.step(action)
@@ -162,6 +163,7 @@ class MainAgent:
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
         plt.show()
+        '''
         """while True:
             # get world state
             current_world = self.env.get_world_state()
@@ -250,20 +252,20 @@ class MainAgent:
         Q= {}
         J = {}
         big_change ={}
-        for w in ALL_POSSIBLE_WOLRD:
-            Q[w] = {}
-            J[w] = {}
-            big_change[w] = {}
-            for s in states:
-                self.env.set_state(s)
-                J[w][s]= {}
-                Q[w][s] = {}
-                for i in range(len(ALL_POSSIBLE_GOAL)):
-                    big_change[w][ALL_POSSIBLE_GOAL[i]] = 0
-                    J[w][s][ALL_POSSIBLE_GOAL[i]] = 0
-                    Q[w][s][ALL_POSSIBLE_GOAL[i]] = {}
-                for a in self.env.get_possible_move(s):
-                    Q[w][s][ALL_POSSIBLE_GOAL[i]][a] = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            Q[ALL_POSSIBLE_GOAL[i]] = {}
+            J[ALL_POSSIBLE_GOAL[i]] = {}
+            big_change[ALL_POSSIBLE_GOAL[i]] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                Q[ALL_POSSIBLE_GOAL[i]][w] = {}
+                J[ALL_POSSIBLE_GOAL[i]][w] = {}
+                big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
+                for s in states:
+                    self.env.set_state(s)
+                    J[ALL_POSSIBLE_GOAL[i]][w][s]= 0
+                    Q[ALL_POSSIBLE_GOAL[i]][w][s] = {}
+                    for a in self.env.get_possible_move(s):
+                        Q[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
         return J, Q, states, big_change 
     
     def bellman_equation(self,J, g, w, a, s):
@@ -272,16 +274,16 @@ class MainAgent:
         for (prob, r, state_prime) in transitions:
             #print(s)
             #print(state_prime)
-            reward = prob*(r + self.gamma*J[w][state_prime][g])
+            reward = prob*(r + self.gamma*J[g][w][state_prime])
             next_state_reward.append(reward)
         return next_state_reward
     
     def initialize_variation(self):
         big_change = {}
-        for w in ALL_POSSIBLE_WOLRD:
-                big_change[w] = {}
-                for i in range(len(ALL_POSSIBLE_GOAL)):
-                    big_change[w][ALL_POSSIBLE_GOAL[i]] = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            big_change[ALL_POSSIBLE_GOAL[i]] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
         return big_change 
     
     def variation_superiorTothreshold(self, variation):
@@ -289,9 +291,8 @@ class MainAgent:
         
         for i in range(len(ALL_POSSIBLE_GOAL)):
             for w in ALL_POSSIBLE_WOLRD:
-                if variation[w][ALL_POSSIBLE_GOAL[i]] <= self.threshold:
+                if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
                     breaking_flag = True * breaking_flag
-                    self.status[w][ALL_POSSIBLE_GOAL[i]] =True
                 else:
                     breaking_flag = False * breaking_flag
         return breaking_flag
@@ -307,27 +308,20 @@ class MainAgent:
                 for s in self.env.get_states_non_terminated(): 
                     self.env.set_state(s)
                     # open the door in Value iteration
-                    temp = J[w][s][g]
+                    temp = J[g][w][s]
                     #do things to set goals
                     for a in self.env.get_possible_move(s):
                         next_state_reward = self.bellman_equation(J, g, w, a, s) 
-                        Q[w][s][g][a]=((np.sum(next_state_reward)))
+                        Q[g][w][s][a]=((np.sum(next_state_reward)))
                                               
-                    J[w][s][g] = max(Q[w][s][g].values())
+                    J[g][w][s] = max(Q[g][w][s].values())
                 
-                    big_change[w][g] = np.abs(temp-J[w][s][g])
+                    big_change[g][w] = np.abs(temp-J[g][w][s])
                     # close the door
                 self.env.open_door_manually(w)    
             if self.variation_superiorTothreshold(big_change):
                 break
         return J, Q
-
-    def check_status(self):
-        flag =True
-        for i in range(len(ALL_POSSIBLE_GOAL)):
-            for w in ALL_POSSIBLE_WOLRD:
-                flag = flag*self.status[w][ALL_POSSIBLE_GOAL[i]]
-        return flag
        
     def value_iteration_multiple_goal(self):
         # set by default
@@ -337,8 +331,6 @@ class MainAgent:
         
         while True:
             big_change = self.initialize_variation()
-            
-            intial_time = time.time()
             for g in ALL_POSSIBLE_GOAL:
                 self.env.set_env_to_goal(g)
                 for w in ALL_POSSIBLE_WOLRD:
@@ -347,23 +339,20 @@ class MainAgent:
                     for s in self.env.get_states_non_terminated():
                         self.env.set_state(s)
                         # open the door in Value iteration
-                        temp = J[w][s][g]
+                        temp = J[g][w][s]
                         #do things to set goals
                         for a in self.env.get_possible_move(s):
                             next_state_reward = self.bellman_equation(J, g, w, a, s) 
-                            Q[w][s][g][a]=((np.sum(next_state_reward)))
+                            Q[g][w][s][a]=((np.sum(next_state_reward)))
                         
-                        J[w][s][g] = max(Q[w][s][g].values())
+                        J[g][w][s] = max(Q[g][w][s].values())
                 
-                        big_change[w][g] = np.abs(temp-J[w][s][g])
-                            
+                        big_change[g][w] = max(big_change[g][w], np.abs(temp-J[g][w][s]))
                         #close the door
-                        
                     self.env.open_door_manually(w)
             if self.variation_superiorTothreshold(big_change):
                 break
             number_iter += 1
-            
         print(number_iter)
         return J,Q      
        
@@ -477,7 +466,6 @@ class MainAgent:
                 for a in self.env.get_possible_move(s): # still debugging this part but works fine
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
-                print(dist[w][s][g][a] )
                 for a in self.env.get_possible_move(s):
                     #print(a)
                     # use max normalization method where we use exp(array - max(array))
@@ -497,40 +485,38 @@ class MainAgent:
         total_prob = {}
         
         states = self.env.get_states_non_terminated()
-        
-        for w in ALL_POSSIBLE_WOLRD:
-            self.env.open_door_manually(w)
-            dist[w] = {}
-            total_prob[w] = {}
-            #print(w)
-            for s in states:
-                self.env.set_state(s)
-                dist[w][s] = {}
-                total_prob[w][s] = {}
-                for i in range(len(ALL_POSSIBLE_GOAL)):
-                    dist[w][s][ALL_POSSIBLE_GOAL[i]] = {}
-                    total_prob[w][s][ALL_POSSIBLE_GOAL[i]] = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            dist[ALL_POSSIBLE_GOAL[i]] = {}
+            total_prob[ALL_POSSIBLE_GOAL[i]] = {}
+            for w in ALL_POSSIBLE_WOLRD:
+                self.env.open_door_manually(w)
+                dist[ALL_POSSIBLE_GOAL[i]][w] = {}
+                total_prob[ALL_POSSIBLE_GOAL[i]][w] = {}
+                #print(w)
+                for s in states:
+                    self.env.set_state(s)
+                    dist[ALL_POSSIBLE_GOAL[i]][w][s] = {}
+                    total_prob[ALL_POSSIBLE_GOAL[i]][w][s] = 0
                     for a in self.env.get_possible_move(s): # still debugging this part but works fine
-                        dist[w][s][ALL_POSSIBLE_GOAL[i]][a] = 0
-                    #for a in ALL_POSSIBLE_ACTIONS :
+                        dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
+                        #for a in ALL_POSSIBLE_ACTIONS :
                     for a in self.env.get_possible_move(s):
                         #print(a)
                         # use max normalization method where we use exp(array - max(array))
                         # instead of exp(arr) which can cause infinite value
                         # we can improve this part of the code
-                        dist[w][s][ALL_POSSIBLE_GOAL[i]][a] = (np.exp(eta*(Q[w][s][ALL_POSSIBLE_GOAL[i]][a] - max(Q[w][s][ALL_POSSIBLE_GOAL[i]].values()))))
-                        total_prob[w][s][ALL_POSSIBLE_GOAL[i]] += dist[w][s][ALL_POSSIBLE_GOAL[i]][a]
+                        dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = (np.exp(eta*(Q[ALL_POSSIBLE_GOAL[i]][w][s][a] - max(Q[ALL_POSSIBLE_GOAL[i]][w][s].values()))))
+                        total_prob[ALL_POSSIBLE_GOAL[i]][w][s] += dist[ALL_POSSIBLE_GOAL[i]][w][s][a]
                     for a in self.env.get_possible_move(s):
-                        dist[w][s][ALL_POSSIBLE_GOAL[i]][a] = (dist[w][s][ALL_POSSIBLE_GOAL[i]][a])/(total_prob[w][s][ALL_POSSIBLE_GOAL[i]])
-            # CLOSE the door in Value iteration
-            self.env.open_door_manually(w)
+                        dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = (dist[ALL_POSSIBLE_GOAL[i]][w][s][a])/(total_prob[ALL_POSSIBLE_GOAL[i]][w][s])
+                # CLOSE the door in Value iteration
+                self.env.open_door_manually(w)
         return dist
        
     def generate_action(self, state, worldState, goal, dist):
-        possible_action = [a for a in dist[worldState][state][goal].keys()]
-        prob = [dist[worldState][state][goal][a] for a in dist[worldState][state][goal].keys()]
+        possible_action = [a for a in dist[goal][worldState][state].keys()]
+        prob = [dist[goal][worldState][state][a] for a in dist[goal][worldState][state].keys()]
         generated_action = np.random.choice(possible_action, p=prob)
-        print(generated_action)
         return generated_action
 
 

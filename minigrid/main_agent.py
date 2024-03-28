@@ -120,17 +120,51 @@ class MainAgent:
         ###   --- T = 
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
-        J2, Q2 = agent_2.value_iteration_baseline(dist)
+        discretize = (25, 30)
+        Q2 = {number: {} for number in discretize}
+        for num in discretize:
+            agent_2.set_discretize_num(num)
+            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+            #Q2[num] = Q2_temp
+        
+            f = open("Q2.txt","w")
+        
+            # write file
+            f.write( str(Q2_temp) )
+            #print('Finish ................ :')
+            #print(num)
+            #print('You can save now')
+        
+        # close file
+        f.close()
+        
+        
+        #J_test = agent_2.extract_J(text_File='Q2.txt', discretize_test=discretize)
+        #values = [J[index][0.0][ALL_POSSIBLE_WOLRD[3]][(1,1)] for index in discretize]
+        #values = []
+        #for index in discretize:
+        #    values.append(J_test[index][0.0][ALL_POSSIBLE_WOLRD[3]][(1,1)])
+            
+        #plt.figure()
+        #plt.plot(discretize, values, label="value function")
+        #plt.show()
         #pprint.PrettyPrinter(width=20).pprint(Q2)
             # deduce the actual optimal policy
-        #policy_agent2 = agent_2.deduce_policy(J2, dist)
+        #policy_agent2 = agent_2.deduce_policy_multiple_goal(J2, dist)
+        #f = open("policy2.txt","w")
+        
+        # write file
+        #f.write( str(policy_agent2) )
+        
+        # close file
+        #f.close()
         #pprint.PrettyPrinter(width=20).pprint(policy_agent2)
-        previous_State = None
-        prior = {ALL_POSSIBLE_GOAL[0]: 0.5, ALL_POSSIBLE_GOAL[1]: 0.5}
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
-        count = 0
-        step.append(count)
+        #previous_State = None
+        #prior = {ALL_POSSIBLE_GOAL[0]: 0.5, ALL_POSSIBLE_GOAL[1]: 0.5}
+        #belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
+        #belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
+        #count = 0
+        #step.append(count)
         #ani = FuncAnimation(plt.gcf(), animate, interval=60)
         #ani.save('growingCoil.mp4', writer = 'ffmpeg', fps = 30)
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
@@ -264,7 +298,7 @@ class MainAgent:
                     self.env.set_state(s)
                     J[ALL_POSSIBLE_GOAL[i]][w][s]= 0
                     Q[ALL_POSSIBLE_GOAL[i]][w][s] = {}
-                    for a in self.env.get_possible_move(s):
+                    for a in ALL_POSSIBLE_ACTIONS:
                         Q[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
         return J, Q, states, big_change 
     

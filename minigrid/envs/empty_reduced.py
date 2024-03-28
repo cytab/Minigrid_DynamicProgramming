@@ -210,7 +210,7 @@ class EmptyReducedEnv(MiniGridEnv):
     def get_reward_1(self, i, j, action, cost_value=0):
         r = 0
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 200 
+            r = 10000 
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsReduced.stay:
@@ -226,8 +226,11 @@ class EmptyReducedEnv(MiniGridEnv):
 #       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsAgent2.take_key:
-            r = -1
-
+            r = -10
+        elif action == ActionsAgent2.take_key1:
+            r = -10
+        elif action == ActionsAgent2.take_key2:
+            r = -10
         return r
     
     def check_move(self, action, w, cost_value=0):
@@ -269,7 +272,7 @@ class EmptyReducedEnv(MiniGridEnv):
             else:
                 if action == ActionsAgent2.nothing:
                     pass
-                if action == ActionsAgent2.take_key1 and w[0] is WorldSate.closed_door1:
+                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.closed_door1:
                     if self.target_door[self.rooms[0].doorPos]:
                         self.target_door[self.rooms[0].doorPos] = False
                     else:
@@ -410,10 +413,14 @@ class EmptyReducedEnv(MiniGridEnv):
                 if n == 1: 
                     goal = Goal()
                     goal.change_color("red")
-                    self.grid.set(*goalPos, goal)
+                    #self.grid.set(*goalPos, goal)
+                    self.grid.set(14,7, goal)
+                    self.goal_.append(np.array([14,7]))
                 else:
-                    self.grid.set(*goalPos, Goal())
-                self.goal_.append(np.array([*goalPos]))
+                    #self.grid.set(*goalPos, Goal())
+                    self.grid.set(14,14, Goal())
+                    self.goal_.append(np.array([14,14]))
+                #self.goal_.append(np.array([*goalPos]))
             
             
         # Place the agent

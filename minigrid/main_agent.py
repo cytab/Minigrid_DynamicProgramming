@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 import pickle, time
+import pomdp_py
 import gymnasium as gym
 import pygame, copy
-import pprint
 from gymnasium import Env
 from minigrid.core.grid import Grid
 import numpy as np
 from minigrid.core.actions import ActionsReduced, ActionsAgent2, WorldSate, GoalState
+from minigrid.core.actions import *
 from minigrid.envs.empty_reduced import EmptyReducedEnv
 from minigrid.minigrid_env import MiniGridEnv
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper
@@ -48,6 +49,7 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
 plt.style.use('fivethirtyeight')
 step = []
 belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+
 def animate(i):
     plt.cla()
     plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
@@ -57,7 +59,6 @@ def animate(i):
     plt.tight_layout()
     plt.draw()
     plt.pause(0.05)
-    
 
 # plt.tight_layout()
 # plt.show()
@@ -87,17 +88,36 @@ class MainAgent:
         """Start the window display with blocking event loop"""
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-        initial_time = time.time()
+        g = GoalState.green_goal
+        self.env.set_env_to_goal(g)
+        agent.step(ActionsAgent2.take_key1)
+        agent.step(ActionsAgent2.take_key2)
+        #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
+        #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
+        
+        epsilon = 1
+        problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[0][0], world2=ALL_POSSIBLE_WOLRD[0][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
+        solve(
+            problem,
+            max_depth=10,
+            discount_factor=0.99,
+            planning_time=1.0,
+            exploration_const=1000,
+            visualize=True,
+            max_time=120,
+            max_steps=500,)
+        
+        #initial_time = time.time()
         # lorsqu'il n'y a pas l'operateur max on a :
             # une boucle de calcul complet dure maximum 0.41 s 0.12s (home pc)
             # nombre iteraation 1439
         # lorsqu'il y a  l'operateur max on a :
             # une boucle de calcul complet dure maximum 0.42 s 0.132 (home pc)
             # nombre iteration 1444
-        J, Q = self.value_iteration_multiple_goal()
-        value_iteration_elapsed_time = initial_time - time.time()
-        print('Elpased time for value iteration with multiple goal:')
-        print(value_iteration_elapsed_time)
+        #J, Q = self.value_iteration_multiple_goal()
+        #value_iteration_elapsed_time = initial_time - time.time()
+        #print('Elpased time for value iteration with multiple goal:')
+        #print(value_iteration_elapsed_time)
         ###   --- T = 246s = 4 min
         #file = open("J.pkl", "wb")
         #pickle.dump(J, file)
@@ -116,27 +136,27 @@ class MainAgent:
         
         
         # Determine initial policy
-        dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+        #dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
         ###   --- T = 
         #pprint.PrettyPrinter(width=20).pprint(dist)
         #print("-------------------------")
-        discretize = (25, 30)
-        Q2 = {number: {} for number in discretize}
-        for num in discretize:
-            agent_2.set_discretize_num(num)
-            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
-            #Q2[num] = Q2_temp
+        #discretize = (25, 30)
+        #Q2 = {number: {} for number in discretize}
+        #for num in discretize:
+        #    agent_2.set_discretize_num(num)
+        #    J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+        #    #Q2[num] = Q2_temp
         
-            f = open("Q2.txt","w")
+        #    f = open("Q2.txt","w")
         
             # write file
-            f.write( str(Q2_temp) )
+        #    f.write( str(Q2_temp) )
             #print('Finish ................ :')
             #print(num)
             #print('You can save now')
         
         # close file
-        f.close()
+        #f.close()
         
         
         #J_test = agent_2.extract_J(text_File='Q2.txt', discretize_test=discretize)

@@ -325,7 +325,15 @@ class EmptyReducedEnv(MiniGridEnv):
                     world_state[i] = WorldSate.open_door2
         
             return tuple(world_state) 
-                
+    
+    def state_dynamic_human(self, previous_state, action_human):
+        self.set_state(previous_state)
+        transition = self.get_transition_probs(action_human, cost_value=1)
+        for (_,_,state_prime) in transition:
+                return True, state_prime
+        print('hereeeeeeeeeeeeeeeeeeeeeee')
+        print(previous_state)
+        return False, previous_state      
         
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []

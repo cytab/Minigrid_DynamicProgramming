@@ -13,11 +13,6 @@ sudo apt-get install patchelf
 
 ## Install Python Environment
 
-
-There are two options:
-
-A. (Recommended) Install with conda:
-
 1. Install conda, if you don't already have it, by following the instructions at [this link](https://docs.conda.io/projects/conda/en/latest/user-guide/install/)
 
 This install will modify the `PATH` variable in your bashrc.

@@ -574,9 +574,10 @@ class MiniGridEnv(gym.Env):
                 if self.agent_dir < 0:
                     self.agent_dir += 4
                     
-        elif self.reduced and action == ActionsReduced.stay:
+        if  action == ActionsReduced.stay:
             if self.reduced:
-
+                pass
+                '''
                 # Get the contents of the cell in front of the agent
                 fwd_cell = self.grid.get(*fwd_pos)
                 if fwd_cell is None or fwd_cell.can_overlap():
@@ -586,6 +587,7 @@ class MiniGridEnv(gym.Env):
                     reward = self._reward()
                 if fwd_cell is not None and fwd_cell.type == "lava":
                     terminated = True
+                    '''
             else:
                 pass
         # Rotate right
@@ -625,7 +627,7 @@ class MiniGridEnv(gym.Env):
             if fwd_cell is not None and fwd_cell.type == "lava":
                 terminated = True
         
-        elif self.reduced and action == self.actions.backward:
+        elif action == self.actions.backward:
             
             self.agent_dir = 1
             # Get the position in front of the agent
@@ -648,7 +650,7 @@ class MiniGridEnv(gym.Env):
             # code interacting closing or opening of door depending of the 
             # target, so create a function to change target
             pass
-
+        
         if not self.reduced:
             # Pick up an object
             if action == self.actions.pickup:

@@ -95,17 +95,25 @@ class MainAgent:
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
         #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         
-        epsilon = 1
+        epsilon = 1e-9
+        
         problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[0][0], world2=ALL_POSSIBLE_WOLRD[0][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
+        
+        #from pomdp_py import to_pomdp_file
+        #filename = "./test_interac.POMDP"
+        #to_pomdp_file(problem.agent, filename, discount_factor=0.95)
+        
+        
         solve(
             problem,
-            max_depth=10,
+            max_depth=12000,
             discount_factor=0.99,
-            planning_time=1.0,
-            exploration_const=1000,
+            planning_time=5.0,
+            exploration_const=50000,
             visualize=True,
             max_time=120,
-            max_steps=500,)
+            max_steps=500,
+            solver_type='sarsop')
         
         #initial_time = time.time()
         # lorsqu'il n'y a pas l'operateur max on a :

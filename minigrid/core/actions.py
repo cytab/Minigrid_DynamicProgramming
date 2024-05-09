@@ -38,9 +38,6 @@ class ActionsAgent2(IntEnum):
     take_key1 = 1
     take_key2 = 2
     take_key = 3
-    
-        
-
 
 class WorldSate(IntEnum):
     open_door = 0
@@ -55,6 +52,8 @@ class GoalState(IntEnum):
     green_goal = 0
     red_goal = 1
     
+ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
+ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 
 class ActionPOMDP(pomdp_py.Action):
     """Mos action; Simple named action."""
@@ -143,7 +142,7 @@ class MotionAction(ActionPOMDP):
         self.distance_cost = distance_cost
         if motion_name is None:
             motion_name = str(motion)
-        super().__init__("move-%s-%s" % (scheme, motion_name))
+        super().__init__("%s" % ( motion_name))
     
 MoveEast2D = MotionAction(
 MotionAction.EAST2D, scheme=MotionAction.SCHEME_XY, motion_name="East2D"
@@ -193,14 +192,26 @@ def WrappedMotion2Action(action):
     
 
 class StatePOMDP(pomdp_py.State):
-    def __init__(self, world, world2, pose= None, goal=None):
+    def __init__(self, world, world2, pose=None, goal=None):
         
         self.p = pose
         self.world1 = world
         self.world2 = world2
         self.goal = goal
-        self.name = str(world) + "-" + str(world2) + "-" +  str(pose)  + "-" + str(goal)
-
+        #self.name = str(world) + "-" + str(world2) + "-" +  str(pose[0]) + '-' + str(pose[1])  + "-" + str(goal)
+        self.name = "case" + str(pose[0]) + 'e' + str(pose[1])
+        if self.goal == GoalState.red_goal:
+            self.name += 'Goal_Red'
+        elif self.goal == GoalState.green_goal:
+            self.name += 'Goal_Green'
+        if self.world1 == WorldSate.closed_door1:
+            self.name += 'W1_Close'
+        elif self.world1 == WorldSate.open_door1:
+            self.name += 'W1_Open'
+        if self.world2 == WorldSate.closed_door2:
+            self.name += 'W2_Close'
+        elif self.world2 == WorldSate.open_door2 :
+            self.name += 'W2_Open' 
     def __hash__(self):
         return hash(self.name)
 
@@ -228,8 +239,22 @@ class HumanObservationPOMDP(pomdp_py.Observation):
         self.world1 = world
         self.world2 = world2
         self.goal = goal
-        self.name = str(world) + "-" + str(world2) +  "-"  + str(pose) + ';' + str(pose)  + "-" + str(goal)
-
+        #self.name = str(world) + "-" + str(world2) +  "-"  + str(pose[0]) + '-' + str(pose[1])  + "-" + str(goal)
+        self.name = "case" + str(pose[0]) + 'e' + str(pose[1]) 
+        if self.goal == GoalState.red_goal:
+            self.name += 'Goal_Red'
+        elif self.goal == GoalState.green_goal:
+            self.name += 'Goal_Green'
+        if self.world1 == WorldSate.closed_door1:
+            self.name += 'W1_Close'
+        elif self.world1 == WorldSate.open_door1:
+            self.name += 'W1_Open'
+        if self.world2 == WorldSate.closed_door2:
+            self.name += 'W2_Close'
+        elif self.world2 == WorldSate.open_door2 :
+            self.name += 'W2_Open'
+        
+        
     def __hash__(self):
         return hash(self.name)
 
@@ -256,7 +281,7 @@ class ObservationPOMDP(pomdp_py.Observation):
         self.state = state
         self.world = world
         self.world2 = world2
-        self.name = str(world) + "-" + str(world2) + "-" + str(state)
+        self.name = str(world) + "-" + str(world2) + "e" + str(state)
 
     def __hash__(self):
         return hash(self.name)
@@ -275,7 +300,7 @@ class ObservationPOMDP(pomdp_py.Observation):
 class HumanTransitionModel(pomdp_py.TransitionModel):
     """We assume that the robot control is perfect and transitions are deterministic."""
 
-    def __init__(self, dim, env, epsilon=1e-9):
+    def __init__(self, dim, env, epsilon=1e-12):
         """
         dim (tuple): a tuple (width, length) for the dimension of the world
         """
@@ -299,8 +324,8 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         #    dx, dy = action.motion
         #    rx += dx
         #    ry += dy
-        #print(self.env.state_dynamic_human(previous_state=human_pose, state=(rx,ry), action_human=WrappedMotion2Action(action)))
         flag, s_prime = self.env.state_dynamic_human(previous_state=human_pose, action_human=WrappedMotion2Action(action))
+        state_world = self.env.get_world_state()
         #if flag:
         #    #print(action)
         #    #state_1 = s_prime
@@ -308,13 +333,16 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         #    return s_prime
         #else:
        #     return human_pose  # no change because change results in invalid pose
-        return s_prime
+        return s_prime, state_world
 
     def probability(self, next_robot_state, state, action):
-        if next_robot_state != self.argmax(state, action):
-            return 0.01
+        self.env.set_state(state.p)
+#        if WrappedMotion2Action(action) in self.env.get_possible_move(state.p):
+        if next_robot_state.p == self.argmax(state, action).p:
+            return 1.0 
         else:
-            return 1 - 0.01
+            return 0.0
+
 
     def argmax(self, state, action):
         #import copy
@@ -326,7 +354,9 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         # camera direction is only not None when looking
         #if isinstance(action, MotionAction):
             # motion action
-        next_human_state.p = self.if_move_by(state, action,dim=self._dim)
+        next_human_state.p, world = self.if_move_by(state, action,dim=self._dim)
+        next_human_state.world1 = world[0]
+        next_human_state.world2 = world[1]
         #print(self.if_move_by(state, action,dim=self._dim))
         #print('previous')
         #print(state.p)
@@ -341,7 +371,9 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
     def get_all_states(self):
         S = []
         for  pose in self.env.get_all_states():
-            S.append(StatePOMDP(world=WorldSate.open_door1, world2=WorldSate.open_door2, pose=pose, goal=GoalState.green_goal))
+            for world in ALL_POSSIBLE_WOLRD:
+                for goal in ALL_POSSIBLE_GOAL:
+                    S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=goal))
         return S
     
     
@@ -353,6 +385,7 @@ class HumanRewardModel(pomdp_py.RewardModel):
         self.env.set_state(state.p)
         self.env.open_door_manually((state.world1,state.world2))
         if isinstance(action, MotionAction):
+            reward = 0
             next_state, reward = self.env.check_move(action=WrappedMotion2Action(action), w=None, cost_value=1)
         return reward
 
@@ -376,9 +409,9 @@ class HumanObservationModel(pomdp_py.ObservationModel):
             action (Action)
         """
         if observation.world1 == next_state.world1 and observation.world2 == next_state.world2 and observation.p == next_state.p and observation.goal == next_state.goal:
-            prob = 1
+            prob = 1.0
         else:
-            prob = 0
+            prob = 0.0
         return prob
 
     def sample(self, next_state, action):
@@ -392,7 +425,9 @@ class HumanObservationModel(pomdp_py.ObservationModel):
     def get_all_observations(self):
         S = []
         for  pose in self.env.get_all_states():
-            S.append(HumanObservationPOMDP(world=WorldSate.open_door1, world2=WorldSate.open_door2, pose=pose, goal=GoalState.green_goal))
+            for world in ALL_POSSIBLE_WOLRD:
+                for goal in ALL_POSSIBLE_GOAL:
+                    S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=goal))
         return S
 
 class PolicyModel(pomdp_py.RolloutPolicy):
@@ -417,8 +452,9 @@ class PolicyModel(pomdp_py.RolloutPolicy):
     def get_all_actions(self, state=None, history=None):
         """note: find can only happen after look."""
         
-        if state is None:
-            return ALL_MOTION_ACTIONS
+        #if state is None:
+        return ALL_MOTION_ACTIONS
+        '''
         else:
             valid_motions = self.env.get_possible_move(state.p)
             custom_motions = list()
@@ -434,7 +470,8 @@ class PolicyModel(pomdp_py.RolloutPolicy):
                 elif mot == ActionsReduced.stay:
                     custom_motions.append(MoveHalt2D)
             return custom_motions
-            
+        '''   
+        
     def rollout(self, state, history=None):
         return random.sample(self.get_all_actions(state=state, history=history), 1)[0]
 
@@ -448,16 +485,14 @@ class GridEnvironment(pomdp_py.Environment):
     
     def state_transition(self,action, execute=True):
         next_state = self.transition_model.sample(self.state, action)
-        #print(self.state)
         reward = self.reward_model.sample(self.state, action, next_state)
+        terminated = False
         if execute:
-            #print(next_state)
             self.apply_transition(next_state)
-            #print(self.state)
-            self.env.step(WrappedMotion2Action(action))
-            return next_state, reward
+            _ , _, terminated, truncated, _ = self.env.step(WrappedMotion2Action(action))
+            return next_state, reward, terminated
         else:
-            return next_state, reward
+            return next_state, reward, terminated
     
 class HumanAgent(pomdp_py.Agent):
     def __init__(self, env, init_human_state, dim, epsilon=1, grid_map=None):
@@ -465,7 +500,8 @@ class HumanAgent(pomdp_py.Agent):
         human_reward = HumanRewardModel(env)
         Human_observation = HumanObservationModel(env,dim, epsilon)
         human_policy = PolicyModel(env)
-        init_belief = pomdp_py.Histogram( {init_human_state: 1.0})
+        init_belief = pomdp_py.Histogram( {s: 0.0 for s in human_transition.get_all_states()})
+        init_belief[init_human_state] = 1.0
         super().__init__(
             init_belief,
             human_policy,
@@ -488,37 +524,40 @@ class Hproblem(pomdp_py.POMDP):
             grid_env,
             name="GRID(%d,%d)" % (env.size, env.size),
         )
-#def belief_update(agent, real_action, real_observation, next_human_state, planner):
+        
+'''        
+def belief_update(agent, real_action, real_observation, next_human_state, planner):
     """Updates the agent's belief; The belief update may happen
     through planner update (e.g. when planner is POMCP)."""
     # Updates the planner; In case of POMCP, agent's belief is also updated.
     #planner.update(agent, real_action, real_observation)
 
     # Update agent's belief, when planner is not POMCP
-    #if not isinstance(planner, pomdp_py.POMCP):
+    if not isinstance(planner, pomdp_py.POMCP):
         # Update belief for every object
-            #if isinstance(belief_obj, pomdp_py.Histogram):
-            #        # Assuming the agent can observe its own state:
-            #        new_belief = pomdp_py.Histogram({next_human_state: 1.0})
+            if isinstance(belief_obj, pomdp_py.Histogram):
+                    # Assuming the agent can observe its own state:
+                    new_belief = pomdp_py.Histogram({next_human_state: 1.0})
                 
-            #else:
-            #    raise ValueError(
-            #        "Unexpected program state."
-            #        "Are you using the appropriate belief representation?"
-            #    )
+            else:
+                raise ValueError(
+                    "Unexpected program state."
+                    "Are you using the appropriate belief representation?"
+                )
 
             #agent.cur_belief.set_object_belief(new_belief)
-            
+'''            
             
 def solve(
     problem,
-    max_depth=10,  # planning horizon
+    max_depth=2000,  # planning horizon
     discount_factor=0.99,
-    planning_time=1.0,  # amount of time (s) to plan each step
-    exploration_const=1000,  # exploration constant
+    planning_time=40.0,  # amount of time (s) to plan each step
+    exploration_const=10000,  # exploration constant
     visualize=True,
     max_time=120,  # maximum amount of time allowed to solve the problem
-    max_steps=500,
+    max_steps=2000,
+    solver_type='sarsop'
 ):  # maximum number of planning steps the agent can take.
     """
     This function terminates when:
@@ -529,30 +568,35 @@ def solve(
     Args:
         visualize (bool) if True, show the pygame visualization.
     """
-
-    #if isinstance(random_object_belief, pomdp_py.Histogram):
-    # Use POUCT
-    pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
     
-    #planner = pomdp_py.POUCT(
-    #    max_depth=max_depth,
-    #    discount_factor=discount_factor,
-    #    planning_time=planning_time,
-    #    exploration_const=exploration_const,
-    #    rollout_policy=problem.agent.policy_model,
-    #    )
-    planner = pomdp_py.POUCT(max_depth=5, discount_factor=0.99,
-                       planning_time=.5, exploration_const=110,
-                       rollout_policy=problem.agent.policy_model, show_progress=True)
+    #planner = pomdp_py.POUCT(max_depth=12000, discount_factor=0.99,
+    #                   planning_time=100.0, exploration_const=50000,
+    #                   rollout_policy=problem.agent.policy_model, show_progress=False)
     
-    #planner = pomdp_py.vi_pruning(problem.agent, pomdp_solve_path, discount_factor=0.95,
-    #                options=["-horizon", "100"],
-    #                remove_generated_files=False,
-    #                return_policy_graph=False)
-    #planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.95,
-    #            timeout=10, memory=20, precision=0.000001,
-    #            remove_generated_files=True)
-    #planner = pomdp_py.ValueIteration(horizon=2, discount_factor=0.99)
+    
+    if solver_type == 'sarsop':
+        pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+        planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
+                    timeout=100, memory=200, precision=0.000001,
+                    remove_generated_files=False)
+        
+    elif solver_type == 'POUCT':
+        planner = pomdp_py.POUCT(
+        max_depth=max_depth,
+        discount_factor=discount_factor,
+        planning_time=planning_time,
+        exploration_const=exploration_const,
+        rollout_policy=problem.agent.policy_model,
+        )
+        
+    elif solver_type == 'VIPruning':
+        pomdp_solve_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/pomdp-solve/src/pomdp-solve"
+        planner = pomdp_py.vi_pruning(problem.agent, pomdp_solve_path, discount_factor=0.99,
+                    options=["-horizon", "100"],
+                    remove_generated_files=False,
+                    return_policy_graph=False)
+    
+    
     # Random by default
     #elif isinstance(random_object_belief, pomdp_py.Particles):
     #    # Use POMCP
@@ -578,27 +622,35 @@ def solve(
         if _time_used > max_time:
             break  # no more time to update.
         # Execute action
-        next_state, reward = problem.env.state_transition(
+        next_state, reward, terminated = problem.env.state_transition(
             real_action, execute=True
         )
 
         # Receive observation
         _start = time.time()
-        real_observation = problem.env.provide_observation(
-            problem.agent.observation_model, real_action
-        )
-
+        real_observation = problem.agent.observation_model.sample(problem.env.state, real_action)
+        #print(problem.agent.cur_belief)
         # Updates
         #print(problem._agent.tree)
         problem.agent.clear_history()  # truncate history
         problem.agent.update_history(real_action, real_observation)
-        #belief_update(
-        #    problem.agent,
-        #    real_action,
-        #    real_observation,
-        #    problem.env.state,
-        #    planner,
-        #)
+        if solver_type == 'sarsop':
+            new_belief = pomdp_py.update_histogram_belief(problem.agent.cur_belief,
+                                                    real_action, real_observation,
+                                                    problem.agent.observation_model,
+                                                    problem.agent.transition_model)
+        else:
+            if isinstance(planner, pomdp_py.PolicyGraph):
+                # No belief update needed. Just update the policy graph
+                planner.update(problem.agent, real_action, real_action)
+            else:
+                # belief update is needed for AlphaVectorPolicy
+                new_belief = pomdp_py.update_histogram_belief(problem.agent.cur_belief,
+                                                            real_action, real_observation,
+                                                            problem.agent.observation_model,
+                                                            problem.agent.transition_model)
+            
+        problem.agent.set_belief(new_belief)
         _time_used += time.time() - _start
 
         # Info and render
@@ -614,14 +666,20 @@ def solve(
 
 
         # Termination check
-        if (problem.env.state.goal == GoalState.red_goal):
-            if (problem.env.state.p[0] == problem.env.env.goal_[0][0]) and (problem.env.state.p[1] == problem.env.env.goal_[0][1]) :
-                print("Done!")
-                break
-        elif (problem.env.state.goal == GoalState.green_goal):
-            if (problem.env.state.p[0] == problem.env.env.goal_[1][0]) and (problem.env.state.p[1] == problem.env.env.goal_[1][1]) :
-                print("Done!")
-                break
+        if problem.env.env.multiple_goal == True:
+            if (problem.env.state.goal == GoalState.red_goal):
+                if (problem.env.state.p[0] == problem.env.env.goal_[0][0]) and (problem.env.state.p[1] == problem.env.env.goal_[0][1]) :
+                    print("Green Done!")
+                    break
+            elif (problem.env.state.goal == GoalState.green_goal):
+                
+                    if (problem.env.state.p[0] == problem.env.env.goal_[1][0]) and (problem.env.state.p[1] == problem.env.env.goal_[1][1]) :
+                        print("Red Done!")
+                        break
+        if terminated:
+            print('Terminated')
+            break
+                
             
         if _time_used > max_time:
             print("Maximum time reached.")

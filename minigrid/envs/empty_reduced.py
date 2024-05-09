@@ -96,7 +96,7 @@ class EmptyReducedEnv(MiniGridEnv):
         agent_start_pos=(1, 1),
         agent_start_dir=0,
         max_steps: int | None = None,
-        door=True,
+        door=False,
         multiple_goal=True,
         **kwargs,
     ):
@@ -209,15 +209,16 @@ class EmptyReducedEnv(MiniGridEnv):
     
     def get_reward_1(self, i, j, action, cost_value=0):
         r = 0
-        if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 10000 
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
-        elif action == ActionsReduced.stay:
-            r = 0
+        if action == ActionsReduced.stay:
+            r += 0
         else:
-            r = r - cost_value
-        return r
+            r += - cost_value
+        
+        if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
+            r = 10000
+        return r 
 
     def get_reward_2(self, action: ActionsAgent2):
         r = 0
@@ -367,8 +368,8 @@ class EmptyReducedEnv(MiniGridEnv):
         # Create an empty grid
         self.grid = Grid(width , height)
         self.num_goal = 2
-        goal_X_1 = width - 4
-        goal_Y_1 = height - 4
+        goal_X_1 = width - 5
+        goal_Y_1 = height - 5
         
         goal_X_2 = width - 2
         goal_Y_2 = height - 2

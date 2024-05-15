@@ -332,9 +332,29 @@ class EmptyReducedEnv(MiniGridEnv):
         transition = self.get_transition_probs(action_human, cost_value=1)
         for (_,_,state_prime) in transition:
                 return True, state_prime
-        print('hereeeeeeeeeeeeeeeeeeeeeee')
         print(previous_state)
         return False, previous_state      
+    
+    def world_dynamic_update(self, action):
+        world_prime = None
+        current_world = self.get_world_state()
+        if not self.env.multiple_goal:
+            if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.nothing:
+                world_prime = current_world
+        else:
+            if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
+                world_prime = (WorldSate.open_door1, current_world[1])
+            elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
+                world_prime = (current_world[0], WorldSate.open_door2)
+            elif action == ActionsAgent2.nothing:
+                world_prime = current_world
+            else:
+                world_prime = current_world
+        return world_prime
         
     def get_transition_probs(self, action=None, cost_value=0):
         probs = []

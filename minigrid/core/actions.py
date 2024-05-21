@@ -7,6 +7,7 @@ import random
 import time
 from pomdp_py import sarsop
 from pomdp_py.utils import TreeDebugger
+import multiprocessing
 
 Number_room = 1
 
@@ -307,8 +308,8 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         for  pose in self.env.get_all_states():
             #world = self.env.get_world_state()
             for world in ALL_POSSIBLE_WOLRD:
-            #    for goal in ALL_POSSIBLE_GOAL:
-                S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=GoalState.green_goal))
+                for goal in ALL_POSSIBLE_GOAL:
+                    S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=goal))
         return S
 
 class HumanObservationPOMDP(pomdp_py.Observation):
@@ -387,8 +388,8 @@ class HumanObservationModel(pomdp_py.ObservationModel):
         for  pose in self.env.get_all_states():
             #world = self.env.get_world_state()
             for world in ALL_POSSIBLE_WOLRD:
-            #    for goal in ALL_POSSIBLE_GOAL:
-                S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=GoalState.green_goal))
+                for goal in ALL_POSSIBLE_GOAL:
+                    S.append(StatePOMDP(world=world[0], world2=world[1], pose=pose, goal=goal))
         return S
 
 class HumanRewardModel(pomdp_py.RewardModel):
@@ -767,7 +768,13 @@ def belief_update(agent, real_action, real_observation, next_human_state, planne
 
             #agent.cur_belief.set_object_belief(new_belief)
 '''            
-            
+def run_sarsop(args):
+        agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files = args
+        planner = sarsop(agent, pomdpsol_path, discount_factor=discount_factor,
+                        timeout=timeout, memory=memory, precision=precision,
+                        remove_generated_files=remove_generated_files)
+        return planner
+             
 def solve(
     problem,
     max_depth=2000,  # planning horizon
@@ -789,17 +796,31 @@ def solve(
         visualize (bool) if True, show the pygame visualization.
     """
     
-    #planner = pomdp_py.POUCT(max_depth=12000, discount_factor=0.99,
-    #                   planning_time=100.0, exploration_const=50000,
-    #                   rollout_policy=problem.agent.policy_model, show_progress=False)
-    
     
     if solver_type == 'sarsop':
+        start = time.time()
+        print('.......... sarsop solver used ...................')
+        agent = problem.agent  # Define or import your agent as needed
+        pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+        discount_factor = 0.99
+        timeout = 100
+        memory = 2000000
+        precision = 0.000001
+        remove_generated_files = False
+        args = (agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files)
+        pool = multiprocessing.Pool(6)
+        print('........ processing')
+        planner = pool.apply(run_sarsop,(args,))
+        end = time.time() - start
+        print('......... finished processing')
+        print('Time spent :')
+        print(end)
+        '''
         pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
         planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
                     timeout=100, memory=200, precision=0.000001,
                     remove_generated_files=False)
-        
+        '''
     elif solver_type == 'POUCT':
         planner = pomdp_py.POUCT(
         max_depth=max_depth,
@@ -815,22 +836,6 @@ def solve(
                     options=["-horizon", "100"],
                     remove_generated_files=False,
                     return_policy_graph=False)
-    
-    
-    # Random by default
-    #elif isinstance(random_object_belief, pomdp_py.Particles):
-    #    # Use POMCP
-    #    planner = pomdp_py.POMCP(
-    #        max_depth=max_depth,
-    #        discount_factor=discount_factor,
-    #        planning_time=planning_time,
-    #        exploration_const=exploration_const,
-    #        rollout_policy=problem.agent.policy_model,
-    #    )  # Random by default
-    #else:
-    #    raise ValueError(
-    #        "Unsupported object belief type %s" % str(type(random_object_belief))
-    #    )
 
     _time_used = 0
     _total_reward = 0  # total, undiscounted reward

@@ -14,7 +14,7 @@ from minigrid.envs.empty_reduced import EmptyReducedEnv
 from minigrid.minigrid_env import MiniGridEnv
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper
 from minigrid.Agent_2 import AssistiveAgent
-
+from pomdp_py import to_pomdp_file
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
@@ -46,9 +46,14 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
 
+
 plt.style.use('fivethirtyeight')
 step = []
-belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}\
+    
+def run_conv(args):
+    agent, filename, discount = args
+    to_pomdp_file(agent, filename, discount)
 
 def animate(i):
     plt.cla()
@@ -99,9 +104,15 @@ class MainAgent:
         
         problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[0][0], world2=ALL_POSSIBLE_WOLRD[0][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
         
-        #from pomdp_py import to_pomdp_file
-        #filename = "./test_interac.POMDP"
-        #to_pomdp_file(problem.agent, filename, discount_factor=0.95)
+        
+        #print('....preparing [.pomdp] file')
+        filename = "./test_human.POMDP"
+        discount = 0.99
+        #pool = multiprocessing.Pool(3)
+        #args = (problem.agent, filename, discount_factor=0.99)
+        #pool.apply(run_conv, (args,))
+        
+        #print('finish .. check file test_human')
         
         
         solve(
@@ -625,7 +636,8 @@ if __name__ == "__main__":
     env: MiniGridEnv = gym.make(
         args.env_id,
         tile_size=args.tile_size,
-        render_mode="human",
+        #render_mode="human",
+         render_mode=None,
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,

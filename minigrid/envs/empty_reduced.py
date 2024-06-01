@@ -149,7 +149,7 @@ class EmptyReducedEnv(MiniGridEnv):
     def get_all_states(self):
         return self.get_states_non_terminated(all=True)
     
-    def obstacle_pos(self, agent_pos):
+    def obstacle_pos(self, agent_pos, robot_action=None):
         # get if there are obstacle around the agent : up , below, on right, on left
         #if there is an obstacle (wall, door) then 1 and if not 0:
         obstacle = [0,0,0,0]
@@ -183,8 +183,9 @@ class EmptyReducedEnv(MiniGridEnv):
                         obstacle[index] = 1
         return obstacle
     
-    def get_possible_move(self, pose=0):
+    def get_possible_move(self, pose=0, robot_action=None):
         # get the obstacle position
+
         if type(pose) == int :
             #i = self.agent_pos[0]
             #j = self.agent_pos[1]
@@ -193,6 +194,7 @@ class EmptyReducedEnv(MiniGridEnv):
             #i = pose[0]
             #j = pose[1]
             obstacle = self.obstacle_pos(pose)
+        
         possible_action = [ActionsReduced.stay] # this action is always possible
         
         for index, value in enumerate(obstacle):
@@ -335,10 +337,11 @@ class EmptyReducedEnv(MiniGridEnv):
         print(previous_state)
         return False, previous_state      
     
-    def world_dynamic_update(self, action):
+    def world_dynamic_update(self, action, current_world=None):
         world_prime = None
-        current_world = self.get_world_state()
-        if not self.env.multiple_goal:
+        if current_world == None:
+            current_world = self.get_world_state()
+        if not self.multiple_goal:
             if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
                 world_prime = WorldSate.open_door
             if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :

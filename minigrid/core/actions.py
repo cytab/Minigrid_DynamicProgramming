@@ -1,5 +1,6 @@
 # Enumeration of possible actions
 from __future__ import annotations
+import os.path
 import pomdp_py
 from enum import IntEnum
 import math
@@ -8,6 +9,12 @@ import time
 from pomdp_py import sarsop
 from pomdp_py.utils import TreeDebugger
 import multiprocessing
+from pomdp_py.utils.interfaces.conversion import (
+    to_pomdp_file,
+    PolicyGraph,
+    AlphaVectorPolicy,
+    parse_pomdp_solve_output,
+)
 
 Number_room = 1
 
@@ -54,6 +61,7 @@ class GoalState(IntEnum):
     
 ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 
 class ActionPOMDP(pomdp_py.Action):
     """Mos action; Simple named action."""
@@ -241,6 +249,9 @@ class StatePOMDP(pomdp_py.State):
 
     def __repr__(self):
         return "(%s)" % self.name
+    
+    def set_goal(self, goal):
+        self.goal=goal
     @property
     def pose(self):
         return self.pose
@@ -275,8 +286,8 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         human_pose = state.p
         rx, ry = human_pose
         flag, s_prime = self.env.state_dynamic_human(previous_state=human_pose, action_human=WrappedMotion2Action(action))
-        state_world = self.env.get_world_state()
-
+        #state_world = self.env.get_world_state()
+        state_world = state.world
         return s_prime, state_world
 
     def probability(self, next_robot_state, state, action):
@@ -401,6 +412,7 @@ class HumanRewardModel(pomdp_py.RewardModel):
         if isinstance(action, MotionAction):
             reward = 0
             next_state, reward = self.env.check_move(action=WrappedMotion2Action(action), w=None, cost_value=1)
+        self.env.open_door_manually((state.world1, state.world2))
         return reward
 
     def sample(self, state, action, next_state):
@@ -547,21 +559,27 @@ class RobotTransitionModel(pomdp_py.TransitionModel):
         human_pose = state.p
         rx, ry = human_pose
         flag, s_prime = self.env.state_dynamic_human(previous_state=human_pose, action_human=WrappedMotion2Action(action))
-        state_world = self.env.get_world_state()
+        state_world = state.world
 
         return s_prime, state_world
 
     def probability(self, next_robot_state, state, action):
         prob = 0
         self.env.set_state(state.p)
+        self.env.open_door_manually((state.world1,state.world2))
+        self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
         #if WrappedMotion2Action(action) in self.env.get_possible_move(state.p):
         for a_1 in self.env.get_possible_move(state.p):
             intermediate_state = self.argmax(state, action) # only change the world becasue it is the action of the robot
             finale_state = self.human_transition(intermediate_state,WrappedAction2Motion(a_1))
+            world_p = self.env.world_dynamic_update(action, current_world=state.world)
             if next_robot_state.p == finale_state.p and next_robot_state.world1 == finale_state.world1 and next_robot_state.world2 == finale_state.world2 and next_robot_state.goal == finale_state.goal:
-                prob += self.prob[next_robot_state.goal][finale_state.world][state.p][a_1]
+                prob += self.prob[next_robot_state.goal][intermediate_state.world][intermediate_state.p][a_1]
             else:
                 prob += 0.0
+        self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
+        self.env.open_door_manually((state.world1,state.world2))
+        
         return prob
 
     def human_transition(self, state, action):
@@ -574,7 +592,7 @@ class RobotTransitionModel(pomdp_py.TransitionModel):
     def argmax(self, state, action):
         """Returns the most likely next robot_state"""
         next_human_state = StatePOMDP(world=state.world1, world2=state.world2, goal=state.goal, pose=state.p)
-        world = self.env.world_dynamic_update(action)
+        world = self.env.world_dynamic_update(action, current_world =state.world)
         next_human_state.world1 = world[0]
         next_human_state.world2 = world[1]
         return next_human_state
@@ -603,11 +621,12 @@ class RobotRewardModel(pomdp_py.RewardModel):
         self.env.set_state(state.p)
         self.env.open_door_manually((state.world1,state.world2))
         self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
-        world_prime = self.env.world_dynamic_update(WrappedAction2RobotAction(action), state.world)
-        self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world())
-        for a_1 in self.env.get_possible_move(state.p):
+        ac = WrappedAction2RobotAction(action)
+        world_prime = self.env.world_dynamic_update(action=ac, current_world=(state.world1, state.world2))
+        self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
+        for a_1 in ALL_POSSIBLE_ACTIONS:
                 next_state, reward_t = self.env.check_move(action=a_1, w=world_prime, cost_value=1)
-                reward +=  self.probability[state.goal][state.world][state.p][a_1]*reward_t
+                reward +=  self.probability[state.goal][world_prime][state.p][a_1]*reward_t
         self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
         self.env.open_door_manually((state.world1,state.world2))
         reward += self.env.get_reward_2(WrappedAction2RobotAction(action))
@@ -719,9 +738,10 @@ class RobotAgent(pomdp_py.Agent):
         robot_observation = RobotObservationModel(env,dim, epsilon)
         robot_policy = RobotPolicyModel(env)
         init_belief = pomdp_py.Histogram( {s: 0.0 for s in robot_transition.get_all_states()})
-        init_belief[init_robot_state] = initial_prob
-        init_robot_state.goal = GoalState.red_goal
-        init_belief[init_robot_state] = 1-initial_prob
+        init_belief[init_robot_state] = 0.5
+        rob = StatePOMDP(world=init_robot_state.world1, world2=init_robot_state.world2, pose=init_robot_state.p, goal=GoalState.red_goal)
+        #init_robot_state.set_goal(goal=GoalState.red_goal)
+        init_belief[rob] = 0.5
         super().__init__(
             init_belief,
             robot_policy,
@@ -732,14 +752,13 @@ class RobotAgent(pomdp_py.Agent):
     def clear_history(self):
         """Custum function; clear history"""
         self._history = None
-        
-        
+                
 class Robotproblem(pomdp_py.POMDP):
     def __init__(self, word1, world2, pose, goal, env, dim, human_probability, epsilon=1, initial_prob=0.5):
         init_human_state = StatePOMDP(world=word1, world2=world2, pose=pose, goal=goal)
         
         robot_agent = RobotAgent(env=env, init_robot_state=init_human_state, dim=dim, epsilon=1, initial_prob=initial_prob, human_probability=human_probability)
-        grid_env = GridEnvironment(env=env, init_true_state=init_human_state, dim=dim, epsilon=epsilon)
+        grid_env = RobotGridEnvironment(env=env, init_true_state=init_human_state, dim=dim, epsilon=epsilon, human_probability=human_probability)
         super().__init__(
             robot_agent,
             grid_env,
@@ -784,7 +803,8 @@ def solve(
     visualize=True,
     max_time=120,  # maximum amount of time allowed to solve the problem
     max_steps=2000,
-    solver_type='sarsop'
+    solver_type='sarsop',
+    humanproblem=False
 ):  # maximum number of planning steps the agent can take.
     """
     This function terminates when:
@@ -798,29 +818,62 @@ def solve(
     
     
     if solver_type == 'sarsop':
-        start = time.time()
-        print('.......... sarsop solver used ...................')
-        agent = problem.agent  # Define or import your agent as needed
-        pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
-        discount_factor = 0.99
-        timeout = 100
-        memory = 2000000
-        precision = 0.000001
-        remove_generated_files = False
-        args = (agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files)
-        pool = multiprocessing.Pool(6)
-        print('........ processing')
-        planner = pool.apply(run_sarsop,(args,))
-        end = time.time() - start
-        print('......... finished processing')
-        print('Time spent :')
-        print(end)
-        '''
-        pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
-        planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
-                    timeout=100, memory=200, precision=0.000001,
-                    remove_generated_files=False)
-        '''
+        if humanproblem:
+            if not os.path.exists('./temp-pomdp-human.policy'):
+                
+                start = time.time()
+                print('.......... sarsop solver used ...................')
+                agent = problem.agent  # Define or import your agent as needed
+                pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+                discount_factor = 0.99
+                timeout = 100
+                memory = 2000000
+                precision = 0.000001
+                remove_generated_files = False
+                args = (agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files)
+                pool = multiprocessing.Pool(6)
+                print('........ processing')
+                planner = pool.apply(run_sarsop,(args,))
+                end = time.time() - start
+                print('......... finished processing')
+                print('Time spent :')
+                print(end)
+            
+                '''
+                pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+                planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
+                            timeout=100, memory=200, precision=0.000001,
+                            remove_generated_files=False)
+                '''
+            else:
+                policy_path = './temp-pomdp-human.policy'
+                planner = AlphaVectorPolicy.construct(policy_path, problem.agent.all_states , problem.agent.all_actions)
+        else:
+            start = time.time()
+            print('.......... sarsop solver used ...................')
+            agent = problem.agent  # Define or import your agent as needed
+            pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+            discount_factor = 0.99
+            timeout = 100
+            memory = 2000000
+            precision = 0.000001
+            remove_generated_files = False
+            args = (agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files)
+            pool = multiprocessing.Pool(6)
+            print('........ processing')
+            planner = pool.apply(run_sarsop,(args,))
+            end = time.time() - start
+            print('......... finished processing')
+            print('Time spent :')
+            print(end)
+        
+            '''
+            pomdpsol_path = "/home/cyrille/Desktop/Minigrid_DynamicProgramming/sarsop/src/pomdpsol"
+            planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
+                        timeout=100, memory=200, precision=0.000001,
+                        remove_generated_files=False)
+            '''
+            
     elif solver_type == 'POUCT':
         planner = pomdp_py.POUCT(
         max_depth=max_depth,
@@ -844,8 +897,8 @@ def solve(
         _start = time.time()
         real_action = planner.plan(problem.agent)
         _time_used += time.time() - _start
-        if _time_used > max_time:
-            break  # no more time to update.
+        #if _time_used > max_time:
+        #    break  # no more time to update.
         # Execute action
         next_state, reward, terminated = problem.env.state_transition(
             real_action, execute=True
@@ -874,7 +927,6 @@ def solve(
                                                             real_action, real_observation,
                                                             problem.agent.observation_model,
                                                             problem.agent.transition_model)
-            
         problem.agent.set_belief(new_belief)
         _time_used += time.time() - _start
 
@@ -906,8 +958,8 @@ def solve(
             break
                 
             
-        if _time_used > max_time:
-            print("Maximum time reached.")
-            break
+        #if _time_used > max_time:
+        #    print("Maximum time reached.")
+        #    break
         #TreeDebugger(problem.agent.tree).pp
         

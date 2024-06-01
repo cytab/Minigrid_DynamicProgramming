@@ -95,14 +95,19 @@ class MainAgent:
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.green_goal
         self.env.set_env_to_goal(g)
-        agent.step(ActionsAgent2.take_key1)
-        agent.step(ActionsAgent2.take_key2)
+        J, Q = self.value_iteration_multiple_goal()
+        dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+        print(dist)
+        #agent.step(ActionsAgent2.take_key1)
+        #agent.step(ActionsAgent2.take_key2)
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
         #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         
         epsilon = 1e-9
         
-        problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[0][0], world2=ALL_POSSIBLE_WOLRD[0][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
+        problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
+        
+        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.5)
         
         
         #print('....preparing [.pomdp] file')
@@ -114,9 +119,21 @@ class MainAgent:
         
         #print('finish .. check file test_human')
         
-        
+        '''
         solve(
             problem,
+            max_depth=12000,
+            discount_factor=0.99,
+            planning_time=5.0,
+            exploration_const=50000,
+            visualize=True,
+            max_time=120,
+            max_steps=500,
+            solver_type='sarsop')
+        '''
+        
+        solve(
+            robotproblem,
             max_depth=12000,
             discount_factor=0.99,
             planning_time=5.0,
@@ -557,7 +574,7 @@ class MainAgent:
         dist = {}
         total_prob = {}
         
-        states = self.env.get_states_non_terminated()
+        states = self.env.get_all_states()
         for i in range(len(ALL_POSSIBLE_GOAL)):
             dist[ALL_POSSIBLE_GOAL[i]] = {}
             total_prob[ALL_POSSIBLE_GOAL[i]] = {}
@@ -570,7 +587,7 @@ class MainAgent:
                     self.env.set_state(s)
                     dist[ALL_POSSIBLE_GOAL[i]][w][s] = {}
                     total_prob[ALL_POSSIBLE_GOAL[i]][w][s] = 0
-                    for a in self.env.get_possible_move(s): # still debugging this part but works fine
+                    for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
                         #for a in ALL_POSSIBLE_ACTIONS :
                     for a in self.env.get_possible_move(s):
@@ -637,7 +654,7 @@ if __name__ == "__main__":
         args.env_id,
         tile_size=args.tile_size,
         #render_mode="human",
-         render_mode=None,
+        render_mode=None,
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,

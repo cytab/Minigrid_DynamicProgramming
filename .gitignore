@@ -2,8 +2,13 @@
 *__pycache__
 *egg-info
 trained_models
+*.txt
+*.policy
+*.pomdp
+*.pkl
+Q.pkL
 pomdp-py/
-pomdp-solve-5.5/
+pomdp-solve/
 sarsop/
 # PyPI
 build/*

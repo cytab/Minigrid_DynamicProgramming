@@ -6,10 +6,13 @@ trained_models
 pomdp-py/
 pomdp-solve/
 sarsop/
+<<<<<<< Updated upstream
 *.pkl
 *.policy
 *.pomdp
 *.txt
+=======
+>>>>>>> Stashed changes
 # PyPI
 build/*
 dist/*

@@ -30,7 +30,19 @@ export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6
 ```
 source activate grid
 ```
+4. Go into repository 
+```
+pip install minigrid
+```
+5. then
+```
+pip install -e .
+```
 
+5. then
+```
+pip install pandas matplotlib
+```
 4. Run this command
 ```
 ./mingrid/main_agent.py

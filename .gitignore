@@ -2,10 +2,7 @@
 *__pycache__
 *egg-info
 trained_models
-*.txt
-*.policy
-*.pomdp
-*.pkl
+
 pomdp-py/
 pomdp-solve/
 sarsop/

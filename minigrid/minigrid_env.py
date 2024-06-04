@@ -576,17 +576,19 @@ class MiniGridEnv(gym.Env):
                     
         if  action == ActionsReduced.stay:
             if self.reduced:
-                
-                # Get the contents of the cell in front of the agent
-                fwd_cell = self.grid.get(*fwd_pos)
-                if fwd_cell is None or fwd_cell.can_overlap():
-                    self.agent_pos = tuple(fwd_pos)
-                if fwd_cell is not None and fwd_cell.type == "goal":
-                    terminated = True
-                    reward = self._reward()
-                if fwd_cell is not None and fwd_cell.type == "lava":
-                    terminated = True
 
+                '''
+                    # Get the contents of the cell in front of the agent
+                    fwd_cell = self.grid.get(*fwd_pos)
+                    if fwd_cell is None or fwd_cell.can_overlap():
+                        self.agent_pos = tuple(fwd_pos)
+                    if fwd_cell is not None and fwd_cell.type == "goal":
+                        terminated = True
+                        reward = self._reward()
+                    if fwd_cell is not None and fwd_cell.type == "lava":
+                        terminated = True
+                '''
+                pass
             else:
                 pass
         # Rotate right

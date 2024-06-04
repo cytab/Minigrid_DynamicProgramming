@@ -96,8 +96,8 @@ class EmptyReducedEnv(MiniGridEnv):
         agent_start_pos=(1, 1),
         agent_start_dir=0,
         max_steps: int | None = None,
-        door=False,
-        multiple_goal=True,
+        door=True,
+        multiple_goal=False,
         **kwargs,
     ):
         self.agent_start_pos = agent_start_pos
@@ -134,16 +134,26 @@ class EmptyReducedEnv(MiniGridEnv):
 
     def get_states_non_terminated(self, all=False):
         s = list()
-        for i in range(1, self.size -1) :
-            for j in range(1, self.size-1):
-                #if self.grid.get(*(i,j)).type == "wall":
-                #    pass
-                if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
-                    pass
-                #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
-                #    break
-                else:
-                    s.append((i,j))
+        if self.multiple_goal:
+            for i in range(1, self.size -1) :
+                for j in range(1, self.size-1):
+                    #if self.grid.get(*(i,j)).type == "wall":
+                    #    pass
+                    if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
+                        pass
+                    #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
+                    #    break
+                    else:
+                        s.append((i,j))
+        else:
+            for i in range(1, self.size -1) :
+                for j in range(1, self.size-1):
+                    if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
+                        break
+                    #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
+                    #    break
+                    else:
+                        s.append((i,j))
         return s
     
     def get_all_states(self):
@@ -334,7 +344,7 @@ class EmptyReducedEnv(MiniGridEnv):
         transition = self.get_transition_probs(action_human, cost_value=1)
         for (_,_,state_prime) in transition:
                 return True, state_prime
-        print(previous_state)
+        #print(previous_state)
         return False, previous_state      
     
     def world_dynamic_update(self, action, current_world=None):
@@ -412,10 +422,12 @@ class EmptyReducedEnv(MiniGridEnv):
             if self.door:
                 # Extension to add wall and door around the goal\
                 # Comment if not necessary  
-                self.splitIdx = self._rand_int(2, width - 2)
+                #self.splitIdx = self._rand_int(2, width - 2)
+                self.splitIdx = 5
                 self.grid.vert_wall(self.splitIdx, 0)
                 # Place a door in the wall
-                self.doorIdx = self._rand_int(1, width - 2)
+                #self.doorIdx = self._rand_int(1, width - 2)
+                self.doorIdx = 5
                 self.target_door = {(self.splitIdx, self.doorIdx):  True}
                 self.put_obj(Door("yellow", is_locked=True), self.splitIdx, self.doorIdx)
             else:

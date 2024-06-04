@@ -20,13 +20,13 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
-ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
-ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
-#ALL_POSSIBLE_GOAL = (GoalState.green_goal)
+#ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
+#ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+ALL_POSSIBLE_GOAL = GoalState.green_goal
 
-
+'''
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
         #PROCESS ENVIRONEMENT IF POSSIBLE 
@@ -45,8 +45,9 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
             
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
+'''
 
-
+'''
 plt.style.use('fivethirtyeight')
 step = []
 belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}\
@@ -64,7 +65,7 @@ def animate(i):
     plt.tight_layout()
     plt.draw()
     plt.pause(0.05)
-
+'''
 # plt.tight_layout()
 # plt.show()
 class MainAgent:
@@ -79,12 +80,12 @@ class MainAgent:
         self.gamma = 0.99
         self.threshold = 1e-1   
         self.status = dict()
-        
+        '''
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.status[ALL_POSSIBLE_GOAL[i]] = {}
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
-        
+        '''
     def start(self, agent: AssistiveAgent):
         #N = 1000
         #miinimum_step = 50
@@ -94,20 +95,30 @@ class MainAgent:
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.green_goal
-        self.env.set_env_to_goal(g)
-        J, Q = self.value_iteration_multiple_goal()
-        dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
-        print(dist)
+        
+        if self.env.multiple_goal:
+            self.env.set_env_to_goal(g)
+            J, Q = self.value_iteration_multiple_goal()
+            #dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+        else:
+            J, Q = self.value_iteration()
+            #print(Q)
+            dist = self.boltzmann_policy(Q, eta=9)
+            print(dist)
+            
         #agent.step(ActionsAgent2.take_key1)
         #agent.step(ActionsAgent2.take_key2)
+        agent.step(ActionsAgent2.take_key)
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
         #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         
         epsilon = 1e-9
         
-        problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
+        #problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
         
-        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.5)
+        
+        #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.5)
+        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[1], world2=None, pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=1, multiple_goal=self.env.multiple_goal)
         
         
         #print('....preparing [.pomdp] file')
@@ -141,7 +152,10 @@ class MainAgent:
             visualize=True,
             max_time=120,
             max_steps=500,
-            solver_type='sarsop')
+            solver_type='sarsop',
+            humanproblem=False,
+            human_intent=g,
+            dist=dist)
         
         #initial_time = time.time()
         # lorsqu'il n'y a pas l'operateur max on a :
@@ -342,20 +356,38 @@ class MainAgent:
         Q= {}
         J = {}
         big_change ={}
-        for i in range(len(ALL_POSSIBLE_GOAL)):
-            Q[ALL_POSSIBLE_GOAL[i]] = {}
-            J[ALL_POSSIBLE_GOAL[i]] = {}
-            big_change[ALL_POSSIBLE_GOAL[i]] = {}
-            for w in ALL_POSSIBLE_WOLRD:
-                Q[ALL_POSSIBLE_GOAL[i]][w] = {}
-                J[ALL_POSSIBLE_GOAL[i]][w] = {}
-                big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
-                for s in states:
-                    self.env.set_state(s)
-                    J[ALL_POSSIBLE_GOAL[i]][w][s]= 0
-                    Q[ALL_POSSIBLE_GOAL[i]][w][s] = {}
-                    for a in ALL_POSSIBLE_ACTIONS:
-                        Q[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
+        if self.env.multiple_goal :
+            pass
+            '''
+            for i in range(len(ALL_POSSIBLE_GOAL)):
+                Q[ALL_POSSIBLE_GOAL[i]] = {}
+                J[ALL_POSSIBLE_GOAL[i]] = {}
+                big_change[ALL_POSSIBLE_GOAL[i]] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    Q[ALL_POSSIBLE_GOAL[i]][w] = {}
+                    J[ALL_POSSIBLE_GOAL[i]][w] = {}
+                    big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
+                    for s in states:
+                        self.env.set_state(s)
+                        J[ALL_POSSIBLE_GOAL[i]][w][s]= 0
+                        Q[ALL_POSSIBLE_GOAL[i]][w][s] = {}
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            Q[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
+            '''
+        else:
+                Q[ALL_POSSIBLE_GOAL] = {}
+                J[ALL_POSSIBLE_GOAL] = {}
+                big_change[ALL_POSSIBLE_GOAL] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    Q[ALL_POSSIBLE_GOAL][w] = {}
+                    J[ALL_POSSIBLE_GOAL][w] = {}
+                    big_change[ALL_POSSIBLE_GOAL][w] = 0
+                    for s in states:
+                        self.env.set_state(s)
+                        J[ALL_POSSIBLE_GOAL][w][s]= 0
+                        Q[ALL_POSSIBLE_GOAL][w][s] = {}
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            Q[ALL_POSSIBLE_GOAL][w][s][a] = 0
         return J, Q, states, big_change 
     
     def bellman_equation(self,J, g, w, a, s):
@@ -370,21 +402,39 @@ class MainAgent:
     
     def initialize_variation(self):
         big_change = {}
-        for i in range(len(ALL_POSSIBLE_GOAL)):
-            big_change[ALL_POSSIBLE_GOAL[i]] = {}
-            for w in ALL_POSSIBLE_WOLRD:
-                big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
+        if self.env.multiple_goal:
+            pass
+            '''
+            for i in range(len(ALL_POSSIBLE_GOAL)):
+                big_change[ALL_POSSIBLE_GOAL[i]] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
+            '''
+        else:
+                big_change[ALL_POSSIBLE_GOAL] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    big_change[ALL_POSSIBLE_GOAL][w] = 0
+                    
         return big_change 
     
     def variation_superiorTothreshold(self, variation):
         breaking_flag = True
-        
-        for i in range(len(ALL_POSSIBLE_GOAL)):
-            for w in ALL_POSSIBLE_WOLRD:
-                if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
-                    breaking_flag = True * breaking_flag
-                else:
-                    breaking_flag = False * breaking_flag
+        if self.env.multiple_goal:
+            pass
+            '''
+            for i in range(len(ALL_POSSIBLE_GOAL)):
+                for w in ALL_POSSIBLE_WOLRD:
+                    if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
+                        breaking_flag = True * breaking_flag
+                    else:
+                        breaking_flag = False * breaking_flag
+            '''
+        else:
+                for w in ALL_POSSIBLE_WOLRD:
+                    if variation[ALL_POSSIBLE_GOAL][w] <= self.threshold:
+                        breaking_flag = True * breaking_flag
+                    else:
+                        breaking_flag = False * breaking_flag
         return breaking_flag
                     
     def value_iteration(self, g=GoalState.green_goal):
@@ -406,7 +456,7 @@ class MainAgent:
                                               
                     J[g][w][s] = max(Q[g][w][s].values())
                 
-                    big_change[g][w] = np.abs(temp-J[g][w][s])
+                    big_change[g][w] = max(big_change[g][w], np.abs(temp-J[g][w][s]))
                     # close the door
                 self.env.open_door_manually(w)    
             if self.variation_superiorTothreshold(big_change):
@@ -507,7 +557,7 @@ class MainAgent:
             policy[s] = best_a
         return policy
     """
-    
+    '''
     def deduce_policy(self, J):
         policy = {}
         self.env.set_env_to_goal(GoalState.green_goal)
@@ -532,14 +582,14 @@ class MainAgent:
                     policy[w][s][ALL_POSSIBLE_GOAL[i]] = ActionsReduced(np.argmax(Q_table))
                 self.env.open_door_manually(w)
         return policy                   
-                  
+    '''      
     #output the distribution over action in all state of agent 1
     def boltzmann_policy(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
         total_prob = {}
         
-        states = self.env.get_states_non_terminated()
+        states = self.env.get_all_states()
         for w in ALL_POSSIBLE_WOLRD:
             self.env.open_door_manually(w)
             dist[w] = {}
@@ -553,7 +603,7 @@ class MainAgent:
                 
                 dist[w][s][g] = {}
                 total_prob[w][s][g] = 0
-                for a in self.env.get_possible_move(s): # still debugging this part but works fine
+                for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
                 for a in self.env.get_possible_move(s):
@@ -561,14 +611,14 @@ class MainAgent:
                     # use max normalization method where we use exp(array - max(array))
                     # instead of exp(arr) which can cause infinite value
                     # we can improve this part of the code
-                    dist[w][s][g][a] = (np.exp(eta*(Q[w][s][g][a] - max(Q[w][s][g].values()))))
+                    dist[w][s][g][a] = (np.exp(eta*(Q[g][w][s][a] - max(Q[g][w][s].values()))))
                     total_prob[w][s][g] += dist[w][s][g][a]
                 for a in self.env.get_possible_move(s):
                     dist[w][s][g][a] = (dist[w][s][g][a])/(total_prob[w][s][g])
             # CLOSE the door in Value iteration
             self.env.open_door_manually(w)
         return dist
-    
+    '''
     def boltzmann_policy_multiple_goal(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
@@ -602,7 +652,7 @@ class MainAgent:
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
         return dist
-       
+    '''
     def generate_action(self, state, worldState, goal, dist):
         possible_action = [a for a in dist[goal][worldState][state].keys()]
         prob = [dist[goal][worldState][state][a] for a in dist[goal][worldState][state].keys()]
@@ -619,7 +669,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-16x16-v0",
+        default="MiniGrid-Empty-Reduced-8x8-v0",
     )
     parser.add_argument(
         "--seed",

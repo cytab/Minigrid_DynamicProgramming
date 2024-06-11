@@ -20,11 +20,11 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
-#ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
-#ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
-ALL_POSSIBLE_GOAL = GoalState.green_goal
+ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
+ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+#ALL_POSSIBLE_GOAL = GoalState.green_goal
 
 '''
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
@@ -94,21 +94,21 @@ class MainAgent:
         """Start the window display with blocking event loop"""
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-        g = GoalState.green_goal
+        g = GoalState.red_goal
         
         if self.env.multiple_goal:
             self.env.set_env_to_goal(g)
             J, Q = self.value_iteration_multiple_goal()
-            #dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+            dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
         else:
             J, Q = self.value_iteration()
             #print(Q)
-            dist = self.boltzmann_policy(Q, eta=9)
-            print(dist)
+            dist = self.boltzmann_policy(Q, eta=5)
+            #print(dist)
             
         #agent.step(ActionsAgent2.take_key1)
         #agent.step(ActionsAgent2.take_key2)
-        agent.step(ActionsAgent2.take_key)
+        #agent.step(ActionsAgent2.take_key)
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
         #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         
@@ -117,8 +117,8 @@ class MainAgent:
         #problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
         
         
-        #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.5)
-        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[1], world2=None, pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=1, multiple_goal=self.env.multiple_goal)
+        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0)
+        #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[1], world2=None, pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.1, multiple_goal=self.env.multiple_goal)
         
         
         #print('....preparing [.pomdp] file')
@@ -357,8 +357,8 @@ class MainAgent:
         J = {}
         big_change ={}
         if self.env.multiple_goal :
-            pass
-            '''
+            
+            
             for i in range(len(ALL_POSSIBLE_GOAL)):
                 Q[ALL_POSSIBLE_GOAL[i]] = {}
                 J[ALL_POSSIBLE_GOAL[i]] = {}
@@ -373,7 +373,7 @@ class MainAgent:
                         Q[ALL_POSSIBLE_GOAL[i]][w][s] = {}
                         for a in ALL_POSSIBLE_ACTIONS:
                             Q[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
-            '''
+            
         else:
                 Q[ALL_POSSIBLE_GOAL] = {}
                 J[ALL_POSSIBLE_GOAL] = {}
@@ -403,13 +403,13 @@ class MainAgent:
     def initialize_variation(self):
         big_change = {}
         if self.env.multiple_goal:
-            pass
-            '''
+            
+            
             for i in range(len(ALL_POSSIBLE_GOAL)):
                 big_change[ALL_POSSIBLE_GOAL[i]] = {}
                 for w in ALL_POSSIBLE_WOLRD:
                     big_change[ALL_POSSIBLE_GOAL[i]][w] = 0
-            '''
+            
         else:
                 big_change[ALL_POSSIBLE_GOAL] = {}
                 for w in ALL_POSSIBLE_WOLRD:
@@ -420,15 +420,15 @@ class MainAgent:
     def variation_superiorTothreshold(self, variation):
         breaking_flag = True
         if self.env.multiple_goal:
-            pass
-            '''
+            
+            
             for i in range(len(ALL_POSSIBLE_GOAL)):
                 for w in ALL_POSSIBLE_WOLRD:
                     if variation[ALL_POSSIBLE_GOAL[i]][w] <= self.threshold:
                         breaking_flag = True * breaking_flag
                     else:
                         breaking_flag = False * breaking_flag
-            '''
+            
         else:
                 for w in ALL_POSSIBLE_WOLRD:
                     if variation[ALL_POSSIBLE_GOAL][w] <= self.threshold:
@@ -618,7 +618,8 @@ class MainAgent:
             # CLOSE the door in Value iteration
             self.env.open_door_manually(w)
         return dist
-    '''
+    
+    
     def boltzmann_policy_multiple_goal(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
@@ -652,7 +653,8 @@ class MainAgent:
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
         return dist
-    '''
+    
+    
     def generate_action(self, state, worldState, goal, dist):
         possible_action = [a for a in dist[goal][worldState][state].keys()]
         prob = [dist[goal][worldState][state][a] for a in dist[goal][worldState][state].keys()]
@@ -669,7 +671,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-8x8-v0",
+        default="MiniGrid-Empty-Reduced-16x16-v0",
     )
     parser.add_argument(
         "--seed",

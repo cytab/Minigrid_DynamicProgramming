@@ -62,11 +62,11 @@ class GoalState(IntEnum):
     red_goal = 1
     
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
-#ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
-#ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
-ALL_POSSIBLE_GOAL = GoalState.green_goal
+ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
+ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
+#ALL_POSSIBLE_GOAL = GoalState.green_goal
 class ActionPOMDP(pomdp_py.Action):
     """Mos action; Simple named action."""
 
@@ -299,6 +299,8 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         self.env.set_state(state.p)
         if self.multiple_goal:
             self.env.open_door_manually((state.world1,state.world2))
+            self.env.set_env_to_goal(state.goal)
+            
         else:
             self.env.open_door_manually(state.world1)
         if not isinstance(action, MotionAction):
@@ -441,6 +443,8 @@ class HumanRewardModel(pomdp_py.RewardModel):
         self.env.set_state(state.p)
         if self.multiple_goal:
             self.env.open_door_manually((state.world1,state.world2))
+            self.env.set_env_to_goal(state.goal)
+            
         else:
             self.env.open_door_manually(state.world1)
         if isinstance(action, MotionAction):
@@ -604,6 +608,8 @@ class RobotTransitionModel(pomdp_py.TransitionModel):
         #self.env.open_door_manually((state.world1,state.world2))
         if self.multiple_goal:
             self.env.open_door_manually((state.world1,state.world2))
+            self.env.set_env_to_goal(state.goal)
+            
         else:
             self.env.open_door_manually(state.world1)
         if not isinstance(action, MotionAction):
@@ -626,6 +632,8 @@ class RobotTransitionModel(pomdp_py.TransitionModel):
         if self.multiple_goal:
             self.env.open_door_manually((state.world1,state.world2))
             self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
+            self.env.set_env_to_goal(state.goal)
+            
         else:
             self.env.open_door_manually(state.world1)
             self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world1)
@@ -710,6 +718,7 @@ class RobotRewardModel(pomdp_py.RewardModel):
             self.env.open_door_manually((state.world1,state.world2))
             self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world)
             world_prime = self.env.world_dynamic_update(action=ac, current_world=(state.world1, state.world2))
+            self.env.set_env_to_goal(state.goal)
         else:
             self.env.open_door_manually(state.world1)
             self.env.check_move(action=WrappedAction2RobotAction(action), w=state.world1)
@@ -868,10 +877,11 @@ class RobotAgent(pomdp_py.Agent):
         robot_observation = RobotObservationModel(env,dim, epsilon, multiple_goal=multiple_goal)
         robot_policy = RobotPolicyModel(env, multiple_goal=multiple_goal)
         init_belief = pomdp_py.Histogram( {s: 0.0 for s in robot_transition.get_all_states()})
-        init_belief[init_robot_state] = 1
-        #rob = StatePOMDP(world=init_robot_state.world1, world2=init_robot_state.world2, pose=init_robot_state.p, goal=GoalState.red_goal)
+        rob = StatePOMDP(world=init_robot_state.world1, world2=init_robot_state.world2, pose=init_robot_state.p, goal=GoalState.green_goal)
+        init_belief[rob] = initial_prob
+        rob = StatePOMDP(world=init_robot_state.world1, world2=init_robot_state.world2, pose=init_robot_state.p, goal=GoalState.red_goal)
         #init_robot_state.set_goal(goal=GoalState.red_goal)
-        #init_belief[rob] = 0.5
+        init_belief[rob] = 1-initial_prob
         super().__init__(
             init_belief,
             robot_policy,
@@ -941,14 +951,14 @@ def generate_action(state, worldState, goal, dist, multiple_goal=True):
 
 plt.style.use('fivethirtyeight')
 step = []
-#belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
-belief_State_Tracker = {ALL_POSSIBLE_GOAL: []}
+belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+#belief_State_Tracker = {ALL_POSSIBLE_GOAL: []}
 
 def animate(i):
     plt.cla()
-    #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
-    #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color='red')
-    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL], label='Green goal', color='green')
+    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
+    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color='red')
+    #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL], label='Green goal', color='green')
     
     plt.legend(loc='upper left')
     plt.tight_layout()
@@ -1014,7 +1024,9 @@ def solve(
                 policy_path = './temp-pomdp-human.policy'
                 planner = AlphaVectorPolicy.construct(policy_path, problem.agent.all_states , problem.agent.all_actions)
         else:
-            if not os.path.exists('./temp-pomdp-single-goal.policy') :
+            if not os.path.exists('./temp-pomdp-multiple-goal.policy') :
+                # time spent for 8x8 eta = 5 : 103s
+                # time spent for 8x8 eta = 9
                 start = time.time()
                 print('.......... sarsop solver used ...................')
                 agent = problem.agent  # Define or import your agent as needed
@@ -1042,7 +1054,7 @@ def solve(
                 '''
             else :
                 # -- define planner for robot 
-                policy_path = './temp-pomdp-single-goal.policy'
+                policy_path = './temp-pomdp-multiple-goal.policy'
                 planner = AlphaVectorPolicy.construct(policy_path, problem.agent.all_states , problem.agent.all_actions)
                 
     elif solver_type == 'POUCT':
@@ -1060,12 +1072,12 @@ def solve(
                     options=["-horizon", "100"],
                     remove_generated_files=False,
                     return_policy_graph=False)
-    '''
-    prior = {ALL_POSSIBLE_GOAL[0]: 0.5, ALL_POSSIBLE_GOAL[1]: 0.5}
+    
+    prior = {ALL_POSSIBLE_GOAL[0]: 1, ALL_POSSIBLE_GOAL[1]: 0}
     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
     belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
-    '''
-    belief_State_Tracker[ALL_POSSIBLE_GOAL].append(1)
+    
+    #belief_State_Tracker[ALL_POSSIBLE_GOAL].append(1)
     count = 0
     step.append(count)
     
@@ -1073,6 +1085,7 @@ def solve(
     _time_used = 0
     _total_reward = 0  # total, undiscounted reward
     for i in range(max_steps):
+        problem.env.env.set_env_to_goal(human_intent)
         plt.ion()
         # Plan action
         _start = time.time()
@@ -1114,15 +1127,15 @@ def solve(
         
         count += 1
         step.append(count)
-        '''
+        
         belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(problem.agent.cur_belief[next_state])
         belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append((1-problem.agent.cur_belief[next_state]))
-        '''
-        belief_State_Tracker[ALL_POSSIBLE_GOAL].append(problem.agent.cur_belief[next_state])
+        
+        #belief_State_Tracker[ALL_POSSIBLE_GOAL].append(problem.agent.cur_belief[next_state])
         animate(i=1)
         
         # Info and render
-        #_total_reward += reward
+        _total_reward += reward
         print("==== Step %d ====" % (i + 1))
         print("Action: %s" % str(real_action))
         print("State: %s" % str(next_state))
@@ -1145,6 +1158,8 @@ def solve(
             print("Action: %s" % str(WrappedAction2Motion(human_action)))
             print("State: %s" % str(next_state))
             print("Reward: %s" % str(reward_h))
+            print("Belief about previous state: %s" % str(problem.agent.cur_belief[next_state]))
+            print("Belief about the other goal: %s" % str(1-problem.agent.cur_belief[next_state]))
             _total_reward += reward_h
             print("Reward (Cumulative): %s" % str(_total_reward))
         
@@ -1156,16 +1171,12 @@ def solve(
                     break
             elif (problem.env.state.goal == GoalState.green_goal):
                 
-                    if (problem.env.state.p[0] == problem.env.env.goal_[1][0]) and (problem.env.state.p[1] == problem.env.env.goal_[1][1]) :
-                        print("Red Done!")
-                        break
+                if (problem.env.state.p[0] == problem.env.env.goal_[1][0]) and (problem.env.state.p[1] == problem.env.env.goal_[1][1]) :
+                    print("Red Done!")
+                    break
         if terminated:
             print('Terminated')
             break
     plt.ioff() 
             
-        #if _time_used > max_time:
-        #    print("Maximum time reached.")
-        #    break
-        #TreeDebugger(problem.agent.tree).pp
         

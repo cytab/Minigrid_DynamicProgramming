@@ -94,7 +94,7 @@ class MainAgent:
         """Start the window display with blocking event loop"""
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-        g = GoalState.red_goal
+        g = GoalState.green_goal
         
         if self.env.multiple_goal:
             self.env.set_env_to_goal(g)

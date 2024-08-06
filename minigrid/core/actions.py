@@ -60,7 +60,8 @@ class WorldSate(IntEnum):
 class GoalState(IntEnum):
     green_goal = 0
     red_goal = 1
-    
+
+PROB_SIM_GREEN_GOAL = 1
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
@@ -277,6 +278,18 @@ class StatePOMDP(pomdp_py.State):
     def world(self):
         return (self.world1, self.world2)
     
+    def get_color(self):
+        if self.goal == GoalState.green_goal:
+            return 'green'
+        elif self.goal == GoalState.red_goal:
+            return 'red'
+        
+    def get_other_color(self):
+        if self.goal == GoalState.green_goal:
+            return 'red'
+        elif self.goal == GoalState.red_goal:
+            return 'green'
+    
 # Human Definition problem -------------------------------------------------------------------- #########################
 
 class HumanTransitionModel(pomdp_py.TransitionModel):
@@ -319,6 +332,7 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
 
     def probability(self, next_robot_state, state, action):
         self.env.set_state(state.p)
+        self.env.set_env_to_goal(state.goal)
 #        if WrappedMotion2Action(action) in self.env.get_possible_move(state.p):
         if next_robot_state.p == self.argmax(state, action).p:
             return 1.0 
@@ -333,6 +347,7 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
         p, world = self.if_move_by(state, action)
         if self.multiple_goal:
             next_human_state = StatePOMDP(world=world[0], world2=world[1], goal=state.goal, pose=p)
+            self.env.set_env_to_goal(state.goal)
         else:
             next_human_state = StatePOMDP(world=world[0], goal=state.goal, pose=p)
         
@@ -340,6 +355,7 @@ class HumanTransitionModel(pomdp_py.TransitionModel):
 
     def sample(self, state, action):
         """Returns next_robot_state"""
+        self.env.set_env_to_goal(state.goal)
         return self.argmax(state, action)
     
     def get_all_states(self):
@@ -679,6 +695,7 @@ class RobotTransitionModel(pomdp_py.TransitionModel):
         """Returns the most likely next robot_state"""
         
         if self.multiple_goal:
+            self.env.set_env_to_goal(state.goal)
             world = self.env.world_dynamic_update(WrappedAction2RobotAction(action), current_world =state.world)
             next_human_state = StatePOMDP(world=world[0], world2=world[1], goal=state.goal, pose=state.p)
         else:
@@ -954,10 +971,14 @@ step = []
 belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
 #belief_State_Tracker = {ALL_POSSIBLE_GOAL: []}
 
-def animate(i):
+def animate(state):
     plt.cla()
-    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
-    plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color='red')
+    if state.goal == GoalState.green_goal:
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color=state.get_color())
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color=state.get_other_color())
+    if state.goal == GoalState.red_goal:
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color=state.get_other_color())
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal', color=state.get_color())
     #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL], label='Green goal', color='green')
     
     plt.legend(loc='upper left')
@@ -994,7 +1015,7 @@ def solve(
     if solver_type == 'sarsop':
         if humanproblem:
             if not os.path.exists('./temp-pomdp-human.policy') :
-                
+                #temp-pomdp-multiple-goalRED-eta9-beliefg1-(-10_1500)-.
                 start = time.time()
                 print('.......... sarsop solver used ...................')
                 agent = problem.agent  # Define or import your agent as needed
@@ -1036,7 +1057,7 @@ def solve(
                 memory = 2000000
                 precision = 0.000001
                 remove_generated_files = False
-                pomdp_name= 'temp-pomdp-single-goal'
+                pomdp_name= 'temp-pomdp-multiple-goal'
                 args = (agent, pomdpsol_path, discount_factor, timeout, memory, precision, remove_generated_files, pomdp_name)
                 pool = multiprocessing.Pool(6)
                 print('........ processing')
@@ -1073,7 +1094,7 @@ def solve(
                     remove_generated_files=False,
                     return_policy_graph=False)
     
-    prior = {ALL_POSSIBLE_GOAL[0]: 1, ALL_POSSIBLE_GOAL[1]: 0}
+    prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
     belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
     
@@ -1127,12 +1148,16 @@ def solve(
         
         count += 1
         step.append(count)
-        
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(problem.agent.cur_belief[next_state])
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append((1-problem.agent.cur_belief[next_state]))
+
+        if human_intent == GoalState.green_goal:
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(problem.agent.cur_belief[next_state])
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append((1-problem.agent.cur_belief[next_state]))
+        elif human_intent == GoalState.red_goal:
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append((1-problem.agent.cur_belief[next_state]))
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append((problem.agent.cur_belief[next_state]))
         
         #belief_State_Tracker[ALL_POSSIBLE_GOAL].append(problem.agent.cur_belief[next_state])
-        animate(i=1)
+        animate(state=next_state)
         
         # Info and render
         _total_reward += reward

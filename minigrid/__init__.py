@@ -213,6 +213,11 @@ def register_minigrid_envs():
         entry_point="minigrid.envs:EmptyReducedEnv",
         kwargs={"size": 16, "reduced": True},
     )
+    register(
+        id="MiniGrid-Empty-Reduced-12x12-v0",
+        entry_point="minigrid.envs:EmptyReducedEnv",
+        kwargs={"size": 12, "reduced": True},
+    )
 
     # Fetch
     # ----------------------------------------

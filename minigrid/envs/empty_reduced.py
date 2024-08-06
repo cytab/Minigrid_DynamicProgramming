@@ -85,6 +85,7 @@ class EmptyReducedEnv(MiniGridEnv):
 
     - `MiniGrid-Empty-Reduced-8x8-v0`
     - `MiniGrid-Empty-Reduced-16x16-v0`
+    - `MiniGrid-Empty-Reduced-12x12-v0`
 
 
     """
@@ -229,7 +230,7 @@ class EmptyReducedEnv(MiniGridEnv):
             r += - cost_value
         
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 1000
+            r = 999
         return r 
 
     def get_reward_2(self, action: ActionsAgent2):
@@ -239,11 +240,11 @@ class EmptyReducedEnv(MiniGridEnv):
 #       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         elif action == ActionsAgent2.take_key:
-            r = -100
+            r = -10
         elif action == ActionsAgent2.take_key1:
-            r = -100
+            r = -10
         elif action == ActionsAgent2.take_key2:
-            r = -100
+            r = -10
         return r
     
     def check_move(self, action, w, cost_value=0):
@@ -458,12 +459,20 @@ class EmptyReducedEnv(MiniGridEnv):
                     goal = Goal()
                     goal.change_color("red")
                     #self.grid.set(*goalPos, goal)
-                    self.grid.set(14,7, goal)
-                    self.goal_.append(np.array([14,7]))
+                    if self.size == 16:
+                        self.grid.set(14,7, goal)
+                        self.goal_.append(np.array([14,7]))
+                    if self.size == 12:
+                        self.grid.set(10,1, goal)
+                        self.goal_.append(np.array([10,1]))
                 else:
                     #self.grid.set(*goalPos, Goal())
-                    self.grid.set(14,14, Goal())
-                    self.goal_.append(np.array([14,14]))
+                    if self.size == 16:
+                        self.grid.set(14,14, Goal())
+                        self.goal_.append(np.array([14,14]))
+                    if self.size == 12:
+                        self.grid.set(10,10, Goal())
+                        self.goal_.append(np.array([10,10]))
                 #self.goal_.append(np.array([*goalPos]))
             
             

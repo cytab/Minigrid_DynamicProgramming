@@ -109,15 +109,14 @@ class MainAgent:
         #agent.step(ActionsAgent2.take_key1)
         #agent.step(ActionsAgent2.take_key2)
         #agent.step(ActionsAgent2.take_key)
-        #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
-        #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
+        #print(dist)
         
         epsilon = 1e-9
         
         #problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
         
         
-        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0)
+        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
         #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[1], world2=None, pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.1, multiple_goal=self.env.multiple_goal)
         
         
@@ -141,6 +140,7 @@ class MainAgent:
             max_time=120,
             max_steps=500,
             solver_type='sarsop')
+            
         '''
         
         solve(
@@ -671,7 +671,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-16x16-v0",
+        default="MiniGrid-Empty-Reduced-12x12-v0",
     )
     parser.add_argument(
         "--seed",

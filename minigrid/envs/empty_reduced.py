@@ -138,12 +138,8 @@ class EmptyReducedEnv(MiniGridEnv):
         if self.multiple_goal:
             for i in range(1, self.size -1) :
                 for j in range(1, self.size-1):
-                    #if self.grid.get(*(i,j)).type == "wall":
-                    #    pass
                     if i == self.goal_pose[0][0] and j == self.goal_pose[0][1] and all == False:
                         pass
-                    #elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1] and all == False:
-                    #    break
                     else:
                         s.append((i,j))
         else:
@@ -237,8 +233,6 @@ class EmptyReducedEnv(MiniGridEnv):
         r = 0
         if action == ActionsAgent2.nothing:
             r = 0
-#       elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
- #           r = 100
         elif action == ActionsAgent2.take_key:
             r = -10
         elif action == ActionsAgent2.take_key1:
@@ -462,17 +456,24 @@ class EmptyReducedEnv(MiniGridEnv):
                     if self.size == 16:
                         self.grid.set(14,7, goal)
                         self.goal_.append(np.array([14,7]))
-                    if self.size == 12:
+                    elif self.size == 12:
                         self.grid.set(10,1, goal)
                         self.goal_.append(np.array([10,1]))
+                    elif self.size == 10:
+                        self.grid.set(8,1, goal)
+                        self.goal_.append(np.array([8,1]))
+                        
                 else:
                     #self.grid.set(*goalPos, Goal())
                     if self.size == 16:
                         self.grid.set(14,14, Goal())
                         self.goal_.append(np.array([14,14]))
-                    if self.size == 12:
+                    elif self.size == 12:
                         self.grid.set(10,10, Goal())
                         self.goal_.append(np.array([10,10]))
+                    elif self.size == 10:
+                        self.grid.set(8,8, Goal())
+                        self.goal_.append(np.array([8,8]))
                 #self.goal_.append(np.array([*goalPos]))
             
             

@@ -26,7 +26,7 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 2
+        discretize_num = 75
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
 
     def step(self, action: ActionsAgent2):
@@ -204,6 +204,7 @@ class AssistiveAgent:
         return J, Q_prime
     
     def approx_prob_to_belief(self, prob):
+        
         closest = min(self.discretize_belief, key=lambda y: abs(prob - y))
         return closest
     
@@ -218,7 +219,7 @@ class AssistiveAgent:
         return expected
     '''
     
-    def expected_reward_over_goal(self, s, w, belief_state, a):
+    def expected_reward_over_goal(self, s, w, belief_state, p_action, a):
         # Initialize the expected reward.
         expected = 0
         
@@ -227,7 +228,7 @@ class AssistiveAgent:
         for  i in range(len(ALL_POSSIBLE_GOAL)):
             self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
             r = self.env.check_move(action=a,w=w,cost_value=1)
-            expected += r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
+            expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
         return expected
     
     
@@ -260,9 +261,8 @@ class AssistiveAgent:
             #print(belief)
             #print('new belief')
             #print(next_belief)
-            reward = prob*(self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=action1,w=world_prime)
-                                *self.expected_reward_over_goal(s=s,w=world_prime , belief_state=belief, a=action1)\
-                            + self.gamma* self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=action1,w=world_prime)*J[next_belief][world_prime][state_prime])
+            reward = prob*self.expected_reward_over_goal(s=s,w=world_prime , belief_state=belief, p_action=p_action, a=action1)\
+                            + self.gamma* self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=action1,w=world_prime)*J[next_belief][world_prime][state_prime]
             next_state_reward.append(reward)
         return next_state_reward
     
@@ -294,12 +294,12 @@ class AssistiveAgent:
         J, Q_prime, states, big_change = self.initializeJ_Q()
         number_iter = 0
         status = {}
-        for dis in self.discretize_belief:
-            status[dis] = 0
+        #for dis in self.discretize_belief:
+        #    status[dis] = 0
         while True:
             big_change = self.initialize_variation()
             #ceci s'execute en 3.4s
-            #initial_time = time.time()
+            initial_time = time.time()
             for belief in self.discretize_belief:
                 #ceci s'execute en 1.6s
                 for w in ALL_POSSIBLE_WOLRD:
@@ -332,11 +332,11 @@ class AssistiveAgent:
                 #break
             #break
             
-            #value_iteration_elapsed_time = initial_time - time.time()
-            #print('Elpased time for value iteration with multiple goal:')
-            #print(value_iteration_elapsed_time)
+            value_iteration_elapsed_time = initial_time - time.time()
+            print('Elpased time for value iteration with multiple goal:')
+            print(value_iteration_elapsed_time)
             print(number_iter)
-            print(big_change)
+            #print(big_change)
             if self.variation_superiorTothreshold(big_change):
                 break
             #if self.test_variation(status):

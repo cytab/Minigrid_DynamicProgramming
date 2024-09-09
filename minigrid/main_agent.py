@@ -18,7 +18,19 @@ from pomdp_py import to_pomdp_file
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QTextEdit, QPushButton
 
+
+def convert_keys_to_str(d):
+    if isinstance(d, dict):
+        return {str(k): convert_keys_to_str(v) for k, v in d.items()}
+    elif isinstance(d, list):
+        return [convert_keys_to_str(i) for i in d]
+    else:
+        return d
+
+VIEW_DICTIONNARY = False
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
@@ -86,13 +98,16 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         '''
+    
     def start(self, agent: AssistiveAgent):
         #N = 1000
         #miinimum_step = 50
         #count_sucess = 0 
         #for i in range(N):
         """Start the window display with blocking event loop"""
+        
         self.reset(self.seed)
+        #self.env.place_agent(top=(1,5))
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.green_goal
         
@@ -100,18 +115,100 @@ class MainAgent:
             self.env.set_env_to_goal(g)
             J, Q = self.value_iteration_multiple_goal()
             dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+            f = open("dist.txt","w")
+        
+            # write file
+            f.write( str(dist) )
+            
+            # close file
+            f.close()
+            # agent 2
+            start = time.time()
+            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+            f = open("J2.txt","w")
+        
+            # write file
+            f.write( str(J2_temp) )
+            
+            
+            #print('You can save now')
+        
+            # close file
+            f.close()
+            end = time.time() - start 
+            print('Duree pour resolution : ')
+            print(end)
+            policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            if VIEW_DICTIONNARY:
+                converted_dict = convert_keys_to_str(dist)
+                converted_Q = convert_keys_to_str(Q2_temp)
+                converted_policy2 = convert_keys_to_str(policy_agent2)
+                class DictViewer(QWidget):
+                    def __init__(self, dictionary, parent=None):
+                        super().__init__(parent)
+                        self.current_dict = dictionary
+                        self.history = []
+
+                        self.initUI()
+
+                    def initUI(self):
+                        self.layout = QVBoxLayout()
+
+                        self.label = QLabel('Select Key:')
+                        self.layout.addWidget(self.label)
+
+                        self.combo = QComboBox()
+                        self.combo.addItems(self.current_dict.keys())
+                        self.layout.addWidget(self.combo)
+
+                        self.text_edit = QTextEdit()
+                        self.layout.addWidget(self.text_edit)
+
+                        self.back_button = QPushButton("Back")
+                        self.back_button.clicked.connect(self.go_back)
+                        self.back_button.setEnabled(False)
+                        self.layout.addWidget(self.back_button)
+
+                        self.combo.activated[str].connect(self.on_select)
+
+                        self.setLayout(self.layout)
+                        self.setWindowTitle('Dictionary Viewer')
+                        self.show()
+
+                    def on_select(self, key):
+                        selected_value = self.current_dict[key]
+                        if isinstance(selected_value, dict):
+                            self.history.append((self.current_dict, self.combo.currentText()))
+                            self.current_dict = selected_value
+                            self.combo.clear()
+                            self.combo.addItems(self.current_dict.keys())
+                            self.text_edit.clear()
+                            self.back_button.setEnabled(True)
+                        else:
+                            self.text_edit.clear()
+                            self.text_edit.setText(str(selected_value))
+
+                    def go_back(self):
+                        if self.history:
+                            self.current_dict, last_selected_key = self.history.pop()
+                            self.combo.clear()
+                            self.combo.addItems(self.current_dict.keys())
+                            self.combo.setCurrentText(last_selected_key)
+                            self.text_edit.clear()
+                            if not self.history:
+                                self.back_button.setEnabled(False)
+                app = QApplication(sys.argv)
+                #viewer = DictViewer(converted_Q)
+                viewer = DictViewer(converted_policy2)
+                
+                sys.exit(app.exec_())
         else:
             J, Q = self.value_iteration()
             #print(Q)
             dist = self.boltzmann_policy(Q, eta=5)
             #print(dist)
-            
-        #agent.step(ActionsAgent2.take_key1)
-        #agent.step(ActionsAgent2.take_key2)
-        #agent.step(ActionsAgent2.take_key)
-        #print(dist)
         
-        epsilon = 1e-9
+        epsilon = 1e-5
         
         #problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
         
@@ -155,8 +252,10 @@ class MainAgent:
             solver_type='sarsop',
             humanproblem=False,
             human_intent=g,
-            dist=dist)
-        
+            dist=dist,
+            computed_policy=policy_agent2,
+            agent2=agent_2)
+        '''
         #initial_time = time.time()
         # lorsqu'il n'y a pas l'operateur max on a :
             # une boucle de calcul complet dure maximum 0.41 s 0.12s (home pc)
@@ -240,6 +339,7 @@ class MainAgent:
         #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
         #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
         ''' 
+        '''
         while True:
             plt.ion()
             previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
@@ -481,7 +581,7 @@ class MainAgent:
                         # open the door in Value iteration
                         temp = J[g][w][s]
                         #do things to set goals
-                        for a in self.env.get_possible_move(s):
+                        for a in ALL_POSSIBLE_ACTIONS:
                             next_state_reward = self.bellman_equation(J, g, w, a, s) 
                             Q[g][w][s][a]=((np.sum(next_state_reward)))
                         
@@ -618,8 +718,7 @@ class MainAgent:
             # CLOSE the door in Value iteration
             self.env.open_door_manually(w)
         return dist
-    
-    
+        
     def boltzmann_policy_multiple_goal(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
@@ -641,14 +740,14 @@ class MainAgent:
                     for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
                         #for a in ALL_POSSIBLE_ACTIONS :
-                    for a in self.env.get_possible_move(s):
+                    for a in ALL_POSSIBLE_ACTIONS:
                         #print(a)
                         # use max normalization method where we use exp(array - max(array))
                         # instead of exp(arr) which can cause infinite value
                         # we can improve this part of the code
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = (np.exp(eta*(Q[ALL_POSSIBLE_GOAL[i]][w][s][a] - max(Q[ALL_POSSIBLE_GOAL[i]][w][s].values()))))
                         total_prob[ALL_POSSIBLE_GOAL[i]][w][s] += dist[ALL_POSSIBLE_GOAL[i]][w][s][a]
-                    for a in self.env.get_possible_move(s):
+                    for a in ALL_POSSIBLE_ACTIONS:
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = (dist[ALL_POSSIBLE_GOAL[i]][w][s][a])/(total_prob[ALL_POSSIBLE_GOAL[i]][w][s])
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)

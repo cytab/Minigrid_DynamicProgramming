@@ -19,9 +19,35 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import sys
+import ast
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QTextEdit, QPushButton
+import json
 
 
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, WorldSate):
+            return {"__enum__": str(obj)}
+        elif isinstance(obj, tuple):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
+
+# Function to save dictionary
+def save_dict_to_file(data, filename):
+    with open(filename, 'w') as f:
+        json.dump(data, f, indent=4, cls=CustomEncoder)
+
+def custom_decoder(dct):
+    if "__enum__" in dct:
+        name, member = dct["__enum__"].split(".")
+        return getattr(WorldSate, member)
+    return dct
+
+# Function to load the dictionary
+def load_dict_from_file(filename):
+    with open(filename, 'r') as f:
+        return json.load(f, object_hook=custom_decoder)
+                    
 def convert_keys_to_str(d):
     if isinstance(d, dict):
         return {str(k): convert_keys_to_str(v) for k, v in d.items()}
@@ -29,6 +55,8 @@ def convert_keys_to_str(d):
         return [convert_keys_to_str(i) for i in d]
     else:
         return d
+
+
 
 VIEW_DICTIONNARY = False
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
@@ -122,8 +150,10 @@ class MainAgent:
             
             # close file
             f.close()
+            
             # agent 2
             start = time.time()
+            
             J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
             f = open("J2.txt","w")
         
@@ -139,6 +169,13 @@ class MainAgent:
             print('Duree pour resolution : ')
             print(end)
             policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            
+            
+            #save_dict_to_file(policy_agent2, 'agent2.txt')
+            # Load the dictionary
+            #loaded_dict = load_dict_from_file('output.txt')
+            #print(loaded_dict)
+                        
             if VIEW_DICTIONNARY:
                 converted_dict = convert_keys_to_str(dist)
                 converted_Q = convert_keys_to_str(Q2_temp)
@@ -239,7 +276,8 @@ class MainAgent:
             solver_type='sarsop')
             
         '''
-        
+        print(agent_2.discretize_belief)
+        print(agent_2.approx_prob_to_belief(0.11))
         solve(
             robotproblem,
             max_depth=12000,

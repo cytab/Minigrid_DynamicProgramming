@@ -26,7 +26,7 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 75
+        discretize_num = 200
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
 
     def step(self, action: ActionsAgent2):

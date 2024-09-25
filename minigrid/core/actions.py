@@ -295,7 +295,7 @@ class StatePOMDP(pomdp_py.State):
 class HumanTransitionModel(pomdp_py.TransitionModel):
     """We assume that the robot control is perfect and transitions are deterministic."""
 
-    def __init__(self, dim, env, epsilon=1e-12, multiple_goal=True):
+    def __init__(self, dim, env, epsilon=1e-5, multiple_goal=True):
         """
         dim (tuple): a tuple (width, length) for the dimension of the world
         """
@@ -414,7 +414,7 @@ class HumanObservationPOMDP(pomdp_py.Observation):
         return (self.world1, self.world2)
 
 class HumanObservationModel(pomdp_py.ObservationModel):
-    def __init__(self, env, dim, epsilon=1):
+    def __init__(self, env, dim,epsilon=1e-5):
         self.env = env
         self.dim = dim
         self.epsilon = epsilon
@@ -506,7 +506,7 @@ class PolicyModel(pomdp_py.RolloutPolicy):
         return random.sample(self.get_all_actions(state=state, history=history), 1)[0]
 
 class HumanAgent(pomdp_py.Agent):
-    def __init__(self, env, init_human_state, dim, epsilon=1, grid_map=None, multiple_goal=True):
+    def __init__(self, env, init_human_state, dim, epsilon=1e-5, grid_map=None, multiple_goal=True):
         human_transition = HumanTransitionModel(dim, env, epsilon=epsilon, multiple_goal=multiple_goal)
         human_reward = HumanRewardModel(env, multiple_goal=multiple_goal)
         Human_observation = HumanObservationModel(env,dim, epsilon)
@@ -525,13 +525,13 @@ class HumanAgent(pomdp_py.Agent):
         self._history = None
 
 class Hproblem(pomdp_py.POMDP):
-    def __init__(self, word1, world2, pose, goal, env, dim, epsilon=1, grid_map=None, multiple_goal=True):
+    def __init__(self, word1, world2, pose, goal, env, dim, epsilon=1e-5, grid_map=None, multiple_goal=True):
         if multiple_goal:
             init_human_state = StatePOMDP(world=word1, world2=world2, pose=pose, goal=goal)
         else:
             init_human_state = StatePOMDP(world=word1, pose=pose, goal=goal)
         
-        human_agent = HumanAgent(env, init_human_state, dim, epsilon=1, grid_map=None, multiple_goal=multiple_goal)
+        human_agent = HumanAgent(env, init_human_state, dim, epsilon=1e-5, grid_map=None, multiple_goal=multiple_goal)
         grid_env = GridEnvironment(env=env, init_true_state=init_human_state, dim=dim, epsilon=epsilon, multiple_goal=multiple_goal)
         super().__init__(
             human_agent,
@@ -1117,7 +1117,20 @@ def solve(
         plt.ion()
         # Plan action
         _start = time.time()
-        
+        if computed_policy is not None and agent2 is not None:
+            #w = problem.env.state.world
+            w = problem.env.state.world
+            state_current = problem.env.state.p
+            if problem.env.state.goal == GoalState.green_goal:
+                print(problem.agent.cur_belief[problem.env.state])
+                approx_belief = agent2.approx_prob_to_belief(problem.agent.cur_belief[problem.env.state])
+                print(approx_belief)
+                print("Compared Action to baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
+            else:
+                print(problem.agent.cur_belief[problem.env.state])
+                approx_belief = agent2.approx_prob_to_belief(1-problem.agent.cur_belief[problem.env.state])
+                print(approx_belief)
+                print("Compared Action of baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
         real_action = planner.plan(problem.agent)
         _time_used += time.time() - _start
         #if _time_used > max_time:
@@ -1141,19 +1154,7 @@ def solve(
         _total_reward += reward
         print("==== Step %d ====" % (i + 1))
         print("Action: %s" % str(real_action))
-        if computed_policy is not None and agent2 is not None:
-            w = problem.env.state.world
-            state_current = problem.env.env.agent_pos
-            if problem.env.state.goal == GoalState.green_goal:
-                print(problem.agent.cur_belief[state_current])
-                approx_belief = agent2.approx_prob_to_belief(problem.agent.cur_belief[state_current])
-                print(approx_belief)
-                print("Compared Action to baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
-            else:
-                print(problem.agent.cur_belief[state_current])
-                approx_belief = agent2.approx_prob_to_belief(1-problem.agent.cur_belief[state_current])
-                print(approx_belief)
-                print("Compared Action of baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
+        
         print("State: %s" % str(next_state))
         print("Reward: %s" % str(reward))
         print("Reward (Cumulative): %s" % str(_total_reward))

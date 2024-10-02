@@ -58,7 +58,7 @@ def convert_keys_to_str(d):
 
 
 
-VIEW_DICTIONNARY = False
+VIEW_DICTIONNARY = True
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
@@ -161,7 +161,6 @@ class MainAgent:
             f.write( str(J2_temp) )
             
             
-            #print('You can save now')
         
             # close file
             f.close()
@@ -169,8 +168,8 @@ class MainAgent:
             print('Duree pour resolution : ')
             print(end)
             policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
-            
-            
+            J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent_2, p_action=dist)
+            dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent_2, eta=9)
             #save_dict_to_file(policy_agent2, 'agent2.txt')
             # Load the dictionary
             #loaded_dict = load_dict_from_file('output.txt')
@@ -180,6 +179,8 @@ class MainAgent:
                 converted_dict = convert_keys_to_str(dist)
                 converted_Q = convert_keys_to_str(Q2_temp)
                 converted_policy2 = convert_keys_to_str(policy_agent2)
+                converted_iterative_q = convert_keys_to_str(Q_iterative)
+                converted_dist_iterative = convert_keys_to_str(dist_iterative)
                 class DictViewer(QWidget):
                     def __init__(self, dictionary, parent=None):
                         super().__init__(parent)
@@ -236,14 +237,12 @@ class MainAgent:
                                 self.back_button.setEnabled(False)
                 app = QApplication(sys.argv)
                 #viewer = DictViewer(converted_Q)
-                viewer = DictViewer(converted_policy2)
+                viewer = DictViewer(converted_dist_iterative)
                 
                 sys.exit(app.exec_())
         else:
             J, Q = self.value_iteration()
-            #print(Q)
             dist = self.boltzmann_policy(Q, eta=5)
-            #print(dist)
         
         epsilon = 1e-5
         
@@ -488,15 +487,13 @@ class MainAgent:
         else:
             return q, best_a, best_value
         """
-    
+     
     def initializeJ_Q(self, g=GoalState.green_goal):
         states = self.env.get_all_states()
         Q= {}
         J = {}
         big_change ={}
         if self.env.multiple_goal :
-            
-            
             for i in range(len(ALL_POSSIBLE_GOAL)):
                 Q[ALL_POSSIBLE_GOAL[i]] = {}
                 J[ALL_POSSIBLE_GOAL[i]] = {}
@@ -528,14 +525,72 @@ class MainAgent:
                             Q[ALL_POSSIBLE_GOAL][w][s][a] = 0
         return J, Q, states, big_change 
     
+    def initializeJ_Q_iterative_game(self, agent, g = GoalState.green_goal) :
+        states = self.env.get_all_states()
+        Q= {}
+        J = {}
+        big_change ={}
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            Q[ALL_POSSIBLE_GOAL[i]] = {}
+            J[ALL_POSSIBLE_GOAL[i]] = {}
+            big_change[ALL_POSSIBLE_GOAL[i]] = {}
+            for belief in agent.discretize_belief:
+                Q[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                J[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                big_change[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    Q[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    J[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    big_change[ALL_POSSIBLE_GOAL[i]][belief][w] = 0
+                    for s in states:
+                        self.env.set_state(s)
+                        J[ALL_POSSIBLE_GOAL[i]][belief][w][s]= 0
+                        Q[ALL_POSSIBLE_GOAL[i]][belief][w][s] = {}
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            Q[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = 0
+        return J, Q, states, big_change 
+                            
     def bellman_equation(self,J, g, w, a, s):
         next_state_reward = []
         transitions = self.env.get_transition_probs(a, cost_value=1)
         for (prob, r, state_prime) in transitions:
-            #print(s)
-            #print(state_prime)
             reward = prob*(r + self.gamma*J[g][w][state_prime])
             next_state_reward.append(reward)
+        return next_state_reward
+    
+    def world_dynamic_update(self, action, current_world):
+        world_prime = None
+        if not self.env.multiple_goal:
+            if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.nothing:
+                world_prime = current_world
+        else:
+            if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
+                world_prime = (WorldSate.open_door1, current_world[1])
+            elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
+                world_prime = (current_world[0], WorldSate.open_door2)
+            elif action == ActionsAgent2.nothing:
+                world_prime = current_world
+            else:
+                world_prime = current_world
+        return world_prime
+    
+    def bellman_equation_iterative_game(self,agent, p_action, J, g, belief, w, a, s):
+        next_state_reward = []
+        optimal_action2 = agent.policy(belief, w, s)
+        self.env.check_move(action=optimal_action2, w=w)
+        transitions = self.env.get_transition_probs(a, cost_value=1)
+        for (prob, r, state_prime) in transitions:    
+            world_prime = self.world_dynamic_update(optimal_action2, w)
+            next_belief = agent.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
+            next_belief = agent.approx_prob_to_belief(next_belief)
+            
+            reward = prob*(r + self.gamma*J[g][next_belief][world_prime][state_prime])
+            next_state_reward.append(reward)
+        self.env.check_move(action=optimal_action2, w=w)
         return next_state_reward
     
     def initialize_variation(self):
@@ -554,7 +609,21 @@ class MainAgent:
                     big_change[ALL_POSSIBLE_GOAL][w] = 0
                     
         return big_change 
-    
+
+    def initialize_variation_iterative_game(self, agent):
+            big_change = {}
+            if self.env.multiple_goal:
+                
+                
+                for i in range(len(ALL_POSSIBLE_GOAL)):
+                    big_change[ALL_POSSIBLE_GOAL[i]] = {}
+                    for belief in agent.discretize_belief:
+                        big_change[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                        for w in ALL_POSSIBLE_WOLRD:
+                            big_change[ALL_POSSIBLE_GOAL[i]][belief][w] = 0
+                        
+            return big_change 
+
     def variation_superiorTothreshold(self, variation):
         breaking_flag = True
         if self.env.multiple_goal:
@@ -574,7 +643,21 @@ class MainAgent:
                     else:
                         breaking_flag = False * breaking_flag
         return breaking_flag
-                    
+    
+    def variation_superiorTothreshold_iterative_game(self, agent, variation):
+        breaking_flag = True
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            for belief in agent.discretize_belief:
+                for w in ALL_POSSIBLE_WOLRD:
+                    print(variation[ALL_POSSIBLE_GOAL[i]][belief][w])
+                    if variation[ALL_POSSIBLE_GOAL[i]][belief][w] <= self.threshold:
+                        breaking_flag = True * breaking_flag
+                    else:
+                        
+                        breaking_flag = False * breaking_flag
+        return breaking_flag
+
+    
     def value_iteration(self, g=GoalState.green_goal):
         J, Q, states, big_change = self.initializeJ_Q()
         g =g
@@ -629,6 +712,45 @@ class MainAgent:
                         #close the door
                     self.env.open_door_manually(w)
             if self.variation_superiorTothreshold(big_change):
+                break
+            number_iter += 1
+        #print(number_iter)
+        return J,Q      
+    
+    def value_iteration_iterative_game(self, agent, p_action):
+        # set by default
+        self.env.set_env_to_goal(GoalState.green_goal)
+        J, Q, states, big_change = self.initializeJ_Q_iterative_game(agent=agent)
+        number_iter = 0
+        
+        while True:
+            big_change = self.initialize_variation_iterative_game(agent=agent)
+            initial_time = time.time()
+            for g in ALL_POSSIBLE_GOAL:
+                self.env.set_env_to_goal(g)
+                for belief in agent.discretize_belief: 
+                    for w in ALL_POSSIBLE_WOLRD:
+                        self.env.open_door_manually(w)
+                        #if self.status[w][g] is False: # we only update the value iteration for value function that didn't converge yet
+                        for s in self.env.get_states_non_terminated():
+                            self.env.set_state(s)
+                            # open the door in Value iteration
+                            temp = J[g][belief][w][s]
+                            #do things to set goals
+                            for a in ALL_POSSIBLE_ACTIONS:
+                                next_state_reward = self.bellman_equation_iterative_game(agent=agent, p_action=p_action, J=J, g=g, belief=belief, w=w, a=a, s=s) 
+                                Q[g][belief][w][s][a]=((np.sum(next_state_reward)))
+                        
+                        J[g][belief][w][s] = max(Q[g][belief][w][s].values())
+                
+                        big_change[g][belief][w] = max(big_change[g][belief][w], np.abs(temp-J[g][belief][w][s]))
+                        #close the door
+                    self.env.open_door_manually(w)
+            value_iteration_elapsed_time = initial_time - time.time()
+            print('Elpased time for value iteration with multiple goal:')
+            print(value_iteration_elapsed_time)
+            print(number_iter)
+            if self.variation_superiorTothreshold_iterative_game(agent=agent, variation=big_change):
                 break
             number_iter += 1
         print(number_iter)
@@ -732,7 +854,6 @@ class MainAgent:
             self.env.open_door_manually(w)
             dist[w] = {}
             total_prob[w] = {}
-            #print(w)
             g = GoalState.green_goal
             for s in states:
                 self.env.set_state(s)
@@ -745,7 +866,6 @@ class MainAgent:
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
                 for a in self.env.get_possible_move(s):
-                    #print(a)
                     # use max normalization method where we use exp(array - max(array))
                     # instead of exp(arr) which can cause infinite value
                     # we can improve this part of the code
@@ -770,7 +890,6 @@ class MainAgent:
                 self.env.open_door_manually(w)
                 dist[ALL_POSSIBLE_GOAL[i]][w] = {}
                 total_prob[ALL_POSSIBLE_GOAL[i]][w] = {}
-                #print(w)
                 for s in states:
                     self.env.set_state(s)
                     dist[ALL_POSSIBLE_GOAL[i]][w][s] = {}
@@ -779,7 +898,6 @@ class MainAgent:
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
                         #for a in ALL_POSSIBLE_ACTIONS :
                     for a in ALL_POSSIBLE_ACTIONS:
-                        #print(a)
                         # use max normalization method where we use exp(array - max(array))
                         # instead of exp(arr) which can cause infinite value
                         # we can improve this part of the code
@@ -790,7 +908,39 @@ class MainAgent:
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
         return dist
-    
+
+    def boltzmann_policy_iterative_game(self, agent, Q, eta):
+        #  IMPROVE INITIALIZATION OF DIC 
+        dist = {}
+        total_prob = {}
+        
+        states = self.env.get_all_states()
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            dist[ALL_POSSIBLE_GOAL[i]] = {}
+            total_prob[ALL_POSSIBLE_GOAL[i]] = {}
+            for belief in agent.discretize_belief:
+                for w in ALL_POSSIBLE_WOLRD:
+                    self.env.open_door_manually(w)
+                    dist[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    total_prob[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    for s in states:
+                        self.env.set_state(s)
+                        dist[ALL_POSSIBLE_GOAL[i]][belief][w][s] = {}
+                        total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] = 0
+                        for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = 0
+                            #for a in ALL_POSSIBLE_ACTIONS :
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            # use max normalization method where we use exp(array - max(array))
+                            # instead of exp(arr) which can cause infinite value
+                            # we can improve this part of the code
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (np.exp(eta*(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] - max(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s].values()))))
+                            total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] += dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a]
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a])/(total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s])
+                    # CLOSE the door in Value iteration
+                    self.env.open_door_manually(w)
+        return dist
     
     def generate_action(self, state, worldState, goal, dist):
         possible_action = [a for a in dist[goal][worldState][state].keys()]
@@ -798,7 +948,12 @@ class MainAgent:
         generated_action = np.random.choice(possible_action, p=prob)
         return generated_action
 
-
+    def generate_action_iterative_game(self, belief, state, worldState, goal, dist):
+        possible_action = [a for a in dist[goal][belief][worldState][state].keys()]
+        prob = [dist[goal][belief][worldState][state][a] for a in dist[goal][belief][worldState][state].keys()]
+        generated_action = np.random.choice(possible_action, p=prob)
+        return generated_action
+    
 if __name__ == "__main__":
     import argparse
 
@@ -850,7 +1005,6 @@ if __name__ == "__main__":
     )
     
     #env = EmptyReducedEnv(render_mode="human", size =16)
-    #print(env.reduced)
     # TODO: check if this can be removed
     if args.agent_view:
         print("Using agent view")

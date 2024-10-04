@@ -20,7 +20,9 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import sys
 import ast
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QTextEdit, QPushButton
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, 
+                             QListWidget, QTextEdit, QPushButton, QGridLayout)
+from PyQt5.QtCore import Qt
 import json
 
 
@@ -181,63 +183,209 @@ class MainAgent:
                 converted_policy2 = convert_keys_to_str(policy_agent2)
                 converted_iterative_q = convert_keys_to_str(Q_iterative)
                 converted_dist_iterative = convert_keys_to_str(dist_iterative)
-                class DictViewer(QWidget):
-                    def __init__(self, dictionary, parent=None):
+                
+                class DynamicDualDictViewer(QWidget):
+                    def __init__(self, dict1, dict2, dict1_name="Dictionary 1", dict2_name="Dictionary 2", parent=None):
                         super().__init__(parent)
-                        self.current_dict = dictionary
-                        self.history = []
+                        self.dict1 = dict1
+                        self.dict2 = dict2
+                        self.current_dict1 = dict1
+                        self.current_dict2 = dict2
+                        self.dict1_name = dict1_name
+                        self.dict2_name = dict2_name
+                        self.history1 = []  # History of navigation for dict1
+                        self.history2 = []  # History of navigation for dict2
+                        self.breadcrumb1 = []  # Track selected keys in dict1
+                        self.breadcrumb2 = []  # Track selected keys in dict2
 
                         self.initUI()
 
                     def initUI(self):
                         self.layout = QVBoxLayout()
 
-                        self.label = QLabel('Select Key:')
-                        self.layout.addWidget(self.label)
+                        # Create a row layout for the dictionary comparison area
+                        self.comparison_layout = QGridLayout()
 
-                        self.combo = QComboBox()
-                        self.combo.addItems(self.current_dict.keys())
-                        self.layout.addWidget(self.combo)
+                        # Breadcrumbs for tracking key paths
+                        self.breadcrumb1_label = QLabel('Path: /')
+                        self.breadcrumb2_label = QLabel('Path: /')
+                        self.comparison_layout.addWidget(self.breadcrumb1_label, 0, 0)
+                        self.comparison_layout.addWidget(self.breadcrumb2_label, 0, 1)
 
-                        self.text_edit = QTextEdit()
-                        self.layout.addWidget(self.text_edit)
+                        # Dictionary names displayed at the top
+                        self.dict1_label = QLabel(f'{self.dict1_name}')
+                        self.dict2_label = QLabel(f'{self.dict2_name}')
+                        self.comparison_layout.addWidget(self.dict1_label, 1, 0)
+                        self.comparison_layout.addWidget(self.dict2_label, 1, 1)
 
-                        self.back_button = QPushButton("Back")
-                        self.back_button.clicked.connect(self.go_back)
-                        self.back_button.setEnabled(False)
-                        self.layout.addWidget(self.back_button)
+                        # Dropdowns for selecting keys from both dictionaries
+                        self.left_list = QListWidget()
+                        self.left_list.addItems(self.current_dict1.keys())
+                        self.left_list.setSelectionMode(QListWidget.MultiSelection)
+                        self.left_list.itemSelectionChanged.connect(self.on_select_left)
+                        self.comparison_layout.addWidget(self.left_list, 2, 0)
 
-                        self.combo.activated[str].connect(self.on_select)
+                        self.right_list = QListWidget()
+                        self.right_list.addItems(self.current_dict2.keys())
+                        self.right_list.setSelectionMode(QListWidget.MultiSelection)
+                        self.right_list.itemSelectionChanged.connect(self.on_select_right)
+                        self.comparison_layout.addWidget(self.right_list, 2, 1)
 
+                        # Layout for multiple text areas to display values
+                        self.left_values_layout = QVBoxLayout()
+                        self.right_values_layout = QVBoxLayout()
+
+                        self.comparison_layout.addLayout(self.left_values_layout, 3, 0)
+                        self.comparison_layout.addLayout(self.right_values_layout, 3, 1)
+
+                        # Add back buttons for each dictionary
+                        self.left_back_button = QPushButton("Back (Left Dict)")
+                        self.left_back_button.clicked.connect(self.go_back_left)
+                        self.left_back_button.setEnabled(False)
+                        self.comparison_layout.addWidget(self.left_back_button, 4, 0)
+
+                        self.right_back_button = QPushButton("Back (Right Dict)")
+                        self.right_back_button.clicked.connect(self.go_back_right)
+                        self.right_back_button.setEnabled(False)
+                        self.comparison_layout.addWidget(self.right_back_button, 4, 1)
+
+                        # Set up the main layout
+                        self.layout.addLayout(self.comparison_layout)
                         self.setLayout(self.layout)
-                        self.setWindowTitle('Dictionary Viewer')
+                        self.setWindowTitle('Dynamic Dual Dictionary Viewer')
+
+                        # Apply the style to the entire application
+                        self.apply_styles()
                         self.show()
 
-                    def on_select(self, key):
-                        selected_value = self.current_dict[key]
-                        if isinstance(selected_value, dict):
-                            self.history.append((self.current_dict, self.combo.currentText()))
-                            self.current_dict = selected_value
-                            self.combo.clear()
-                            self.combo.addItems(self.current_dict.keys())
-                            self.text_edit.clear()
-                            self.back_button.setEnabled(True)
-                        else:
-                            self.text_edit.clear()
-                            self.text_edit.setText(str(selected_value))
+                    def apply_styles(self):
+                        """Apply custom styles to the widgets for a better visual appearance."""
+                        self.setStyleSheet("""
+                            QLabel {
+                                font-family: Arial;
+                                font-size: 16px;
+                                font-weight: bold;
+                                color: #333333;
+                            }
+                            QListWidget {
+                                background-color: #f0f0f0;
+                                font-family: Arial;
+                                font-size: 14px;
+                                padding: 5px;
+                                border: 1px solid #cccccc;
+                                border-radius: 10px;
+                                margin: 10px 0;
+                            }
+                            QTextEdit {
+                                background-color: #ffffff;
+                                font-family: Courier;
+                                font-size: 14px;
+                                border: 1px solid #cccccc;
+                                border-radius: 10px;
+                                padding: 10px;
+                                margin-bottom: 10px;
+                            }
+                            QPushButton {
+                                background-color: #5cb85c;
+                                font-family: Arial;
+                                font-size: 14px;
+                                font-weight: bold;
+                                color: white;
+                                padding: 8px 16px;
+                                border: none;
+                                border-radius: 5px;
+                                margin: 10px 0;
+                            }
+                            QPushButton:hover {
+                                background-color: #4cae4c;
+                            }
+                            QWidget {
+                                background-color: #f8f9fa;
+                            }
+                        """)
 
-                    def go_back(self):
-                        if self.history:
-                            self.current_dict, last_selected_key = self.history.pop()
-                            self.combo.clear()
-                            self.combo.addItems(self.current_dict.keys())
-                            self.combo.setCurrentText(last_selected_key)
-                            self.text_edit.clear()
-                            if not self.history:
-                                self.back_button.setEnabled(False)
+                    def clear_values(self):
+                        """Clear all the value display areas."""
+                        for i in reversed(range(self.left_values_layout.count())):
+                            self.left_values_layout.itemAt(i).widget().deleteLater()
+                        for i in reversed(range(self.right_values_layout.count())):
+                            self.right_values_layout.itemAt(i).widget().deleteLater()
+
+                    def display_values(self, dictionary, keys, layout, side):
+                        """Display the selected values in the provided layout without clearing previous values."""
+                        self.clear_values()  # Ensure only the current selection is visible
+                        for key in keys:
+                            selected_value = dictionary.get(key)
+                            text_edit = QTextEdit()
+                            text_edit.setReadOnly(True)
+                            if isinstance(selected_value, dict):
+                                text_edit.setText(f"{key}: <Nested Dictionary>")
+                                # Add to history and allow going deeper
+                                if side == 'left':
+                                    self.history1.append((self.current_dict1, key))
+                                    self.current_dict1 = selected_value
+                                    self.left_list.clear()
+                                    self.left_list.addItems(self.current_dict1.keys())
+                                    self.left_back_button.setEnabled(True)
+                                else:
+                                    self.history2.append((self.current_dict2, key))
+                                    self.current_dict2 = selected_value
+                                    self.right_list.clear()
+                                    self.right_list.addItems(self.current_dict2.keys())
+                                    self.right_back_button.setEnabled(True)
+                            else:
+                                text_edit.setText(f"{key}: {str(selected_value)}")
+                            layout.addWidget(text_edit)
+
+                    def on_select_left(self):
+                        """Handle the selection of multiple keys in the left dictionary."""
+                        selected_items = self.left_list.selectedItems()
+                        selected_keys = [item.text() for item in selected_items]
+                        self.breadcrumb1 = selected_keys
+                        self.update_breadcrumbs()
+                        self.display_values(self.current_dict1, selected_keys, self.left_values_layout, 'left')
+
+                    def on_select_right(self):
+                        """Handle the selection of multiple keys in the right dictionary."""
+                        selected_items = self.right_list.selectedItems()
+                        selected_keys = [item.text() for item in selected_items]
+                        self.breadcrumb2 = selected_keys
+                        self.update_breadcrumbs()
+                        self.display_values(self.current_dict2, selected_keys, self.right_values_layout, 'right')
+
+                    def update_breadcrumbs(self):
+                        """Update the breadcrumb labels to show the current path in each dictionary."""
+                        self.breadcrumb1_label.setText(f'Path: /{" / ".join(self.breadcrumb1)}')
+                        self.breadcrumb2_label.setText(f'Path: /{" / ".join(self.breadcrumb2)}')
+
+                    def go_back_left(self):
+                        """Go back to the previous dictionary in the left list."""
+                        if self.history1:
+                            self.current_dict1, last_selected_key = self.history1.pop()
+                            self.left_list.clear()
+                            self.left_list.addItems(self.current_dict1.keys())
+                            self.breadcrumb1.pop()  # Remove the last breadcrumb entry
+                            self.update_breadcrumbs()
+                            self.clear_values()  # Clear previous values when navigating back
+                            if not self.history1:
+                                self.left_back_button.setEnabled(False)
+
+                    def go_back_right(self):
+                        """Go back to the previous dictionary in the right list."""
+                        if self.history2:
+                            self.current_dict2, last_selected_key = self.history2.pop()
+                            self.right_list.clear()
+                            self.right_list.addItems(self.current_dict2.keys())
+                            self.breadcrumb2.pop()  # Remove the last breadcrumb entry
+                            self.update_breadcrumbs()
+                            self.clear_values()  # Clear previous values when navigating back
+                            if not self.history2:
+                                self.right_back_button.setEnabled(False)
+
+
+                # Application setup
                 app = QApplication(sys.argv)
-                #viewer = DictViewer(converted_Q)
-                viewer = DictViewer(converted_dist_iterative)
+                viewer = DynamicDualDictViewer(converted_iterative_q, converted_dist_iterative, dict1_name='Q valeur humain', dict2_name='DIst boltzman humain')
                 
                 sys.exit(app.exec_())
         else:
@@ -578,18 +726,45 @@ class MainAgent:
                 world_prime = current_world
         return world_prime
     
+    def belief_state(self, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = previous_dist_g
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            conditional_state_world = 0
+            self.env.set_state(previous_state)
+            for a in self.env.get_possible_move(previous_state):
+                transition = self.env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        return current_dist
+    
+    def belief_state_discretize(self, belief, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief, ALL_POSSIBLE_GOAL[1]: 1-belief}
+        current_dist = self.belief_state(previous_dist_g=current_dist, dist_boltzmann=dist_boltzmann, w=w, s=s, previous_state=previous_state)
+        return current_dist[ALL_POSSIBLE_GOAL[0]]
+    
     def bellman_equation_iterative_game(self,agent, p_action, J, g, belief, w, a, s):
         next_state_reward = []
         optimal_action2 = agent.policy(belief, w, s)
+        #print(optimal_action2)
         self.env.check_move(action=optimal_action2, w=w)
-        transitions = self.env.get_transition_probs(a, cost_value=1)
+        transitions = self.env.get_transition_probs( action=a, cost_value=1)
         for (prob, r, state_prime) in transitions:    
             world_prime = self.world_dynamic_update(optimal_action2, w)
-            next_belief = agent.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
+            next_belief = self.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
             next_belief = agent.approx_prob_to_belief(next_belief)
-            
             reward = prob*(r + self.gamma*J[g][next_belief][world_prime][state_prime])
             next_state_reward.append(reward)
+        #print(next_state_reward)
         self.env.check_move(action=optimal_action2, w=w)
         return next_state_reward
     
@@ -649,7 +824,7 @@ class MainAgent:
         for i in range(len(ALL_POSSIBLE_GOAL)):
             for belief in agent.discretize_belief:
                 for w in ALL_POSSIBLE_WOLRD:
-                    print(variation[ALL_POSSIBLE_GOAL[i]][belief][w])
+                    #print(variation[ALL_POSSIBLE_GOAL[i]][belief][w])
                     if variation[ALL_POSSIBLE_GOAL[i]][belief][w] <= self.threshold:
                         breaking_flag = True * breaking_flag
                     else:
@@ -722,7 +897,7 @@ class MainAgent:
         self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q_iterative_game(agent=agent)
         number_iter = 0
-        
+        temp = {}
         while True:
             big_change = self.initialize_variation_iterative_game(agent=agent)
             initial_time = time.time()
@@ -739,11 +914,12 @@ class MainAgent:
                             #do things to set goals
                             for a in ALL_POSSIBLE_ACTIONS:
                                 next_state_reward = self.bellman_equation_iterative_game(agent=agent, p_action=p_action, J=J, g=g, belief=belief, w=w, a=a, s=s) 
+                                #print(next_state_reward)
                                 Q[g][belief][w][s][a]=((np.sum(next_state_reward)))
                         
-                        J[g][belief][w][s] = max(Q[g][belief][w][s].values())
+                            J[g][belief][w][s] = max(Q[g][belief][w][s].values())
                 
-                        big_change[g][belief][w] = max(big_change[g][belief][w], np.abs(temp-J[g][belief][w][s]))
+                            big_change[g][belief][w] = max(big_change[g][belief][w], np.abs(temp-J[g][belief][w][s]))
                         #close the door
                     self.env.open_door_manually(w)
             value_iteration_elapsed_time = initial_time - time.time()
@@ -919,6 +1095,8 @@ class MainAgent:
             dist[ALL_POSSIBLE_GOAL[i]] = {}
             total_prob[ALL_POSSIBLE_GOAL[i]] = {}
             for belief in agent.discretize_belief:
+                dist[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                total_prob[ALL_POSSIBLE_GOAL[i]][belief] = {}
                 for w in ALL_POSSIBLE_WOLRD:
                     self.env.open_door_manually(w)
                     dist[ALL_POSSIBLE_GOAL[i]][belief][w] = {}

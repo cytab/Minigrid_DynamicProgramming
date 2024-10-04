@@ -122,6 +122,7 @@ class AssistiveAgent:
         for belief in self.discretize_belief:
             for w in ALL_POSSIBLE_WOLRD:
                 if variation[belief][w] > self.threshold:
+                    #print(variation[belief][w])
                     return False  # Variation exceeds threshold, immediately return False
         return True  # All variations are within threshold, return True
     
@@ -318,7 +319,7 @@ class AssistiveAgent:
                 for w in ALL_POSSIBLE_WOLRD:
                     self.env.open_door_manually(w)
                     # ceci s'execute en 0.44s
-                    for s in states:
+                    for s in self.env.get_states_non_terminated():
                         self.env.set_state(s)
                         temp = J[belief][w][s]
                         #ceci s'execute en 0.002s

@@ -26,8 +26,9 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 5
+        discretize_num = 12
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
+        #print(self.discretize_belief)
 
     def step(self, action: ActionsAgent2):
         #_ , reward, terminated, truncated, _ = self.env.step(action)
@@ -239,12 +240,30 @@ class AssistiveAgent:
             expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
         return expected
     
+    def expected_reward_over_goal_iterative(self, s, w, belief_state, p_action, a):
+        # Initialize the expected reward.
+        expected = 0
+        
+        # Iterate over the possible goals to calculate the expected reward.
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief_state, ALL_POSSIBLE_GOAL[1]: 1-belief_state}
+        for  i in range(len(ALL_POSSIBLE_GOAL)):
+            self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
+            r = self.env.check_move(action=a,w=w,cost_value=1)
+            expected += p_action[ALL_POSSIBLE_GOAL[i]][belief_state][w][s][a]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
+        return expected
     
     def expected_prob_over_action(self, belief_state,  p_action, s, a, w):
         expected = 0
         current_dist = {ALL_POSSIBLE_GOAL[0]: belief_state, ALL_POSSIBLE_GOAL[1]: 1-belief_state}
         for  i in range(len(ALL_POSSIBLE_GOAL)):
             expected += p_action[ALL_POSSIBLE_GOAL[i]][w][s][a]*current_dist[ALL_POSSIBLE_GOAL[i]]
+        return expected
+    
+    def expected_prob_over_action_iterative(self, belief_state,  p_action, s, a, w):
+        expected = 0
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief_state, ALL_POSSIBLE_GOAL[1]: 1-belief_state}
+        for  i in range(len(ALL_POSSIBLE_GOAL)):
+            expected += p_action[ALL_POSSIBLE_GOAL[i]][belief_state][w][s][a]*current_dist[ALL_POSSIBLE_GOAL[i]]
         return expected
     
     '''
@@ -254,7 +273,7 @@ class AssistiveAgent:
         return expected
     '''
 
-    def bellman_equation(self, action2, action1, belief, w, s, p_action, J):
+    def  bellman_equation(self, action2, action1, belief, w, s, p_action, J):
         next_state_reward = []
         transitions = self.env.get_transition_probsA2(w=w, action=action1, cost_value=1)
         for (prob, r, state_prime) in transitions:
@@ -277,8 +296,8 @@ class AssistiveAgent:
             #print('precomputed belief')
             #print(next_belief)
             next_belief = self.approx_prob_to_belief(next_belief)
-            reward = prob*self.expected_reward_over_goal(s=s,w=world_prime , belief_state=belief, p_action=p_action, a=action1)\
-                            + self.gamma* self.expected_prob_over_action(belief_state=belief, p_action=p_action,s=s, a=action1,w=world_prime)*J[next_belief][world_prime][state_prime]
+            reward = prob*self.expected_reward_over_goal_iterative(s=s,w=world_prime , belief_state=belief, p_action=p_action, a=action1)\
+                            + self.gamma* self.expected_prob_over_action_iterative(belief_state=belief, p_action=p_action,s=s, a=action1,w=world_prime)*J[next_belief][world_prime][state_prime]
             next_state_reward.append(reward)
         return next_state_reward
     '''
@@ -450,7 +469,9 @@ class AssistiveAgent:
         # be carful of dynamic of w that needs the action of agent 2
         #PROCESS ENVIRONEMENT IF POSSIBLE
         current_dist = {ALL_POSSIBLE_GOAL[0]: belief, ALL_POSSIBLE_GOAL[1]: 1-belief}
-        current_dist = self.belief_state_iterative_game(previous_dist_g=current_dist, dist_boltzmann=dist_boltzmann, w=w, s=s, previous_state=previous_state)
+        #print(belief)
+        temp = self.belief_state_iterative_game(previous_dist_g=current_dist, dist_boltzmann=dist_boltzmann, w=w, s=s, previous_state=previous_state, belief=belief)
+        current_dist = temp
         return current_dist[ALL_POSSIBLE_GOAL[0]]
     
     
@@ -473,19 +494,23 @@ class AssistiveAgent:
             current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
     
-    def belief_state_iterative_game(self, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
+    def belief_state_iterative_game(self, previous_dist_g, dist_boltzmann, w, s, previous_state, belief,  action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
         #PROCESS ENVIRONEMENT IF POSSIBLE 
+        #print(previous_dist_g)
         current_dist = previous_dist_g
         normalizing_factor = 0
         for i in range(len(ALL_POSSIBLE_GOAL)):
+            #print(i)
+            #print(current_dist)
             conditional_state_world = 0
             self.env.set_state(previous_state)
             for a in self.env.get_possible_move(previous_state):
                 transition = self.env.get_transition_probs(a, cost_value=1)
                 for (_,_,state_prime) in transition:
                     if state_prime == s:
-                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][previous_dist_g[ALL_POSSIBLE_GOAL[0]]][w][previous_state][a]
+                        #print(previous_dist_g[ALL_POSSIBLE_GOAL[0]])
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][belief][w][previous_state][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
         if normalizing_factor > 0:
@@ -621,7 +646,7 @@ class AssistiveAgent:
                     for action in ALL_POSSIBLE_ACTIONS_2 :
                         self.env.check_move(action=action, w=w)
                         for a_1 in self.env.get_possible_move(s):
-                            next_state_reward = self.bellman_equation(action2=action, action1=a_1, belief=belief, w=w, s=s, p_action=p_action, J=J)
+                            next_state_reward = self.bellman_equation_iterative_game(action2=action, action1=a_1, belief=belief, w=w, s=s, p_action=p_action, J=J)
                         Q_table[int(action)] = np.sum(next_state_reward) 
                         # put back the door
                         self.env.check_move(action=action, w=w)

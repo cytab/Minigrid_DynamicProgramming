@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import sys
 import ast
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, 
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, QComboBox,
                              QListWidget, QTextEdit, QPushButton, QGridLayout)
 from PyQt5.QtCore import Qt
 import json
@@ -60,7 +60,8 @@ def convert_keys_to_str(d):
 
 
 
-VIEW_DICTIONNARY = True
+VIEW_DICTIONNARY = False
+USE_LIBRARY = True
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
@@ -143,6 +144,7 @@ class MainAgent:
         
         if self.env.multiple_goal:
             self.env.set_env_to_goal(g)
+            print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
             J, Q = self.value_iteration_multiple_goal()
             dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
             f = open("dist.txt","w")
@@ -155,35 +157,44 @@ class MainAgent:
             
             # agent 2
             start = time.time()
+            if USE_LIBRARY:
+                print('@@@@@@@@@@@@@@@@@@ Robot policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+
+                J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+                f = open("J2.txt","w")
             
-            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
-            f = open("J2.txt","w")
-        
-            # write file
-            f.write( str(J2_temp) )
+                # write file
+                f.write( str(J2_temp) )
+                
+                
             
+                # close file
+                f.close()
+                end = time.time() - start 
+                print('Duree pour resolution : ')
+                print(end)
+                policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
             
-        
-            # close file
-            f.close()
-            end = time.time() - start 
-            print('Duree pour resolution : ')
-            print(end)
-            policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            '''
+            print('@@@@@@@@@@@@@@@@@@ Human policy ADAPTATIVE Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
             J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent_2, p_action=dist)
             dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent_2, eta=9)
-            #save_dict_to_file(policy_agent2, 'agent2.txt')
-            # Load the dictionary
-            #loaded_dict = load_dict_from_file('output.txt')
-            #print(loaded_dict)
-                        
+            
+            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            J_iterative_1, Q_iterative_1 = agent_2.value_iteration_baseline_iterative_game(dist_iterative)
+            policy_agent2_niveau_1 = agent_2.deduce_policy_iterative_game(J=J_iterative_1, p_action=dist_iterative)
+            '''
+            
             if VIEW_DICTIONNARY:
                 converted_dict = convert_keys_to_str(dist)
                 converted_Q = convert_keys_to_str(Q2_temp)
                 converted_policy2 = convert_keys_to_str(policy_agent2)
-                converted_iterative_q = convert_keys_to_str(Q_iterative)
-                converted_dist_iterative = convert_keys_to_str(dist_iterative)
-                
+                #converted_iterative_q = convert_keys_to_str(Q_iterative)
+                #converted_dist_iterative = convert_keys_to_str(dist_iterative)
+                #converted_iterative_q_2 = convert_keys_to_str(Q_iterative_1)
+                #converted_iterative_policy_agent2_niveau_1 = convert_keys_to_str(policy_agent2_niveau_1)
                 class DynamicDualDictViewer(QWidget):
                     def __init__(self, dict1, dict2, dict1_name="Dictionary 1", dict2_name="Dictionary 2", parent=None):
                         super().__init__(parent)
@@ -193,8 +204,13 @@ class MainAgent:
                         self.current_dict2 = dict2
                         self.dict1_name = dict1_name
                         self.dict2_name = dict2_name
-                        self.history1 = []  # History of navigation for dict1
-                        self.history2 = []  # History of navigation for dict2
+
+                        self.active_history1 = []  # Active history of navigation for dict1
+                        self.active_history2 = []  # Active history of navigation for dict2
+
+                        self.passive_history1 = [(dict1, 'Root')]  # Passive history for dict1 (stores all visited states)
+                        self.passive_history2 = [(dict2, 'Root')]  # Passive history for dict2
+
                         self.breadcrumb1 = []  # Track selected keys in dict1
                         self.breadcrumb2 = []  # Track selected keys in dict2
 
@@ -249,6 +265,17 @@ class MainAgent:
                         self.right_back_button.setEnabled(False)
                         self.comparison_layout.addWidget(self.right_back_button, 4, 1)
 
+                        # Add passive history navigation combo boxes
+                        self.left_history_combo = QComboBox()
+                        self.left_history_combo.addItems([item[1] for item in self.passive_history1])
+                        self.left_history_combo.currentIndexChanged.connect(self.on_select_passive_history_left)
+                        self.comparison_layout.addWidget(self.left_history_combo, 5, 0)
+
+                        self.right_history_combo = QComboBox()
+                        self.right_history_combo.addItems([item[1] for item in self.passive_history2])
+                        self.right_history_combo.currentIndexChanged.connect(self.on_select_passive_history_right)
+                        self.comparison_layout.addWidget(self.right_history_combo, 5, 1)
+
                         # Set up the main layout
                         self.layout.addLayout(self.comparison_layout)
                         self.setLayout(self.layout)
@@ -286,7 +313,7 @@ class MainAgent:
                                 margin-bottom: 10px;
                             }
                             QPushButton {
-                                background-color: #5cb85c;
+                                background-color: #8B4513;
                                 font-family: Arial;
                                 font-size: 14px;
                                 font-weight: bold;
@@ -297,7 +324,7 @@ class MainAgent:
                                 margin: 10px 0;
                             }
                             QPushButton:hover {
-                                background-color: #4cae4c;
+                                background-color: #A0522D;
                             }
                             QWidget {
                                 background-color: #f8f9fa;
@@ -320,15 +347,19 @@ class MainAgent:
                             text_edit.setReadOnly(True)
                             if isinstance(selected_value, dict):
                                 text_edit.setText(f"{key}: <Nested Dictionary>")
-                                # Add to history and allow going deeper
+                                # Add to active and passive history, and allow going deeper
                                 if side == 'left':
-                                    self.history1.append((self.current_dict1, key))
+                                    self.active_history1.append((self.current_dict1, key))
+                                    self.passive_history1.append((self.current_dict1, key))
+                                    self.left_history_combo.addItem(f"{key}")
                                     self.current_dict1 = selected_value
                                     self.left_list.clear()
                                     self.left_list.addItems(self.current_dict1.keys())
                                     self.left_back_button.setEnabled(True)
                                 else:
-                                    self.history2.append((self.current_dict2, key))
+                                    self.active_history2.append((self.current_dict2, key))
+                                    self.passive_history2.append((self.current_dict2, key))
+                                    self.right_history_combo.addItem(f"{key}")
                                     self.current_dict2 = selected_value
                                     self.right_list.clear()
                                     self.right_list.addItems(self.current_dict2.keys())
@@ -360,32 +391,48 @@ class MainAgent:
 
                     def go_back_left(self):
                         """Go back to the previous dictionary in the left list."""
-                        if self.history1:
-                            self.current_dict1, last_selected_key = self.history1.pop()
+                        if self.active_history1:
+                            self.current_dict1, last_selected_key = self.active_history1.pop()
                             self.left_list.clear()
                             self.left_list.addItems(self.current_dict1.keys())
                             self.breadcrumb1.pop()  # Remove the last breadcrumb entry
                             self.update_breadcrumbs()
                             self.clear_values()  # Clear previous values when navigating back
-                            if not self.history1:
+                            if not self.active_history1:
                                 self.left_back_button.setEnabled(False)
 
                     def go_back_right(self):
                         """Go back to the previous dictionary in the right list."""
-                        if self.history2:
-                            self.current_dict2, last_selected_key = self.history2.pop()
+                        if self.active_history2:
+                            self.current_dict2, last_selected_key = self.active_history2.pop()
                             self.right_list.clear()
                             self.right_list.addItems(self.current_dict2.keys())
                             self.breadcrumb2.pop()  # Remove the last breadcrumb entry
                             self.update_breadcrumbs()
                             self.clear_values()  # Clear previous values when navigating back
-                            if not self.history2:
+                            if not self.active_history2:
                                 self.right_back_button.setEnabled(False)
+
+                    def on_select_passive_history_left(self, index):
+                        """Handle selection from passive history for the left dictionary."""
+                        if index < len(self.passive_history1):
+                            self.current_dict1, _ = self.passive_history1[index]
+                            self.left_list.clear()
+                            self.left_list.addItems(self.current_dict1.keys())
+                            self.clear_values()
+
+                    def on_select_passive_history_right(self, index):
+                        """Handle selection from passive history for the right dictionary."""
+                        if index < len(self.passive_history2):
+                            self.current_dict2, _ = self.passive_history2[index]
+                            self.right_list.clear()
+                            self.right_list.addItems(self.current_dict2.keys())
+                            self.clear_values()
 
 
                 # Application setup
                 app = QApplication(sys.argv)
-                viewer = DynamicDualDictViewer(converted_iterative_q, converted_dist_iterative, dict1_name='Q valeur humain', dict2_name='DIst boltzman humain')
+                viewer = DynamicDualDictViewer(converted_dict, converted_policy2, dict1_name='Poliy Agent H niveau 0', dict2_name='PoliCY Agent 2 niveau 0')
                 
                 sys.exit(app.exec_())
         else:
@@ -734,7 +781,7 @@ class MainAgent:
         for i in range(len(ALL_POSSIBLE_GOAL)):
             conditional_state_world = 0
             self.env.set_state(previous_state)
-            for a in self.env.get_possible_move(previous_state):
+            for a in ALL_POSSIBLE_ACTIONS:
                 transition = self.env.get_transition_probs(a, cost_value=1)
                 for (_,_,state_prime) in transition:
                     if state_prime == s:
@@ -762,7 +809,8 @@ class MainAgent:
             world_prime = self.world_dynamic_update(optimal_action2, w)
             next_belief = self.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
             next_belief = agent.approx_prob_to_belief(next_belief)
-            reward = prob*(r + self.gamma*J[g][next_belief][world_prime][state_prime])
+            r = self.env.check_move(action=a,w=world_prime,cost_value=1)
+            reward = prob*(r[1] + self.gamma*J[g][next_belief][world_prime][state_prime])
             next_state_reward.append(reward)
         #print(next_state_reward)
         self.env.check_move(action=optimal_action2, w=w)
@@ -1107,8 +1155,7 @@ class MainAgent:
                         total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] = 0
                         for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
                             dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = 0
-                            #for a in ALL_POSSIBLE_ACTIONS :
-                        for a in ALL_POSSIBLE_ACTIONS:
+                        for a in ALL_POSSIBLE_ACTIONS :
                             # use max normalization method where we use exp(array - max(array))
                             # instead of exp(arr) which can cause infinite value
                             # we can improve this part of the code

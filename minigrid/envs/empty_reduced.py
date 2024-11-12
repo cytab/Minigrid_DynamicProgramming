@@ -226,7 +226,7 @@ class EmptyReducedEnv(MiniGridEnv):
             r += - cost_value
         
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            r = 99999
+            r = 999
         return r 
 
     def get_reward_2(self, action: ActionsAgent2):
@@ -234,11 +234,11 @@ class EmptyReducedEnv(MiniGridEnv):
         if action == ActionsAgent2.nothing:
             r = 0
         elif action == ActionsAgent2.take_key:
-            r = -100
+            r = -10
         elif action == ActionsAgent2.take_key1:
-            r = -100
+            r = -10
         elif action == ActionsAgent2.take_key2:
-            r = -100
+            r = -10
         return r
     
     def check_move(self, action, w, cost_value=0):

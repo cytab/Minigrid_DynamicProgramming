@@ -20,7 +20,10 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import sys
 import ast
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QComboBox, QTextEdit, QPushButton
+from scipy.optimize import fsolve, root
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, QComboBox,
+                             QListWidget, QTextEdit, QPushButton, QGridLayout)
+from PyQt5.QtCore import Qt
 import json
 
 
@@ -59,6 +62,7 @@ def convert_keys_to_str(d):
 
 
 VIEW_DICTIONNARY = False
+USE_LIBRARY = True
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 
@@ -66,7 +70,7 @@ ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.op
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 #ALL_POSSIBLE_GOAL = GoalState.green_goal
 
-'''
+
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
         #PROCESS ENVIRONEMENT IF POSSIBLE 
@@ -83,19 +87,18 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
             
-        current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
-'''
 
+belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+step = []
 '''
 plt.style.use('fivethirtyeight')
-step = []
-belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}\
-    
 def run_conv(args):
     agent, filename, discount = args
     to_pomdp_file(agent, filename, discount)
-
+'''
 def animate(i):
     plt.cla()
     plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
@@ -105,7 +108,7 @@ def animate(i):
     plt.tight_layout()
     plt.draw()
     plt.pause(0.05)
-'''
+
 # plt.tight_layout()
 # plt.show()
 class MainAgent:
@@ -141,6 +144,7 @@ class MainAgent:
         
         if self.env.multiple_goal:
             self.env.set_env_to_goal(g)
+            print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
             J, Q = self.value_iteration_multiple_goal()
             dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
             f = open("dist.txt","w")
@@ -153,97 +157,287 @@ class MainAgent:
             
             # agent 2
             start = time.time()
+            if USE_LIBRARY:
+                print('@@@@@@@@@@@@@@@@@@ Robot policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+
+                J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+                f = open("J2.txt","w")
             
-            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
-            f = open("J2.txt","w")
-        
-            # write file
-            f.write( str(J2_temp) )
+                # write file
+                f.write( str(J2_temp) )
+                
+                
             
+                # close file
+                f.close()
+                end = time.time() - start 
+                print('Duree pour resolution : ')
+                print(end)
+                policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
             
-            #print('You can save now')
-        
-            # close file
-            f.close()
-            end = time.time() - start 
-            print('Duree pour resolution : ')
-            print(end)
-            policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            '''
+            print('@@@@@@@@@@@@@@@@@@ Human policy ADAPTATIVE Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent_2, p_action=dist)
+            dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent_2, eta=9)
             
+            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            J_iterative_1, Q_iterative_1 = agent_2.value_iteration_baseline_iterative_game(dist_iterative)
+            policy_agent2_niveau_1 = agent_2.deduce_policy_iterative_game(J=J_iterative_1, p_action=dist_iterative)
+            '''
             
-            #save_dict_to_file(policy_agent2, 'agent2.txt')
-            # Load the dictionary
-            #loaded_dict = load_dict_from_file('output.txt')
-            #print(loaded_dict)
-                        
             if VIEW_DICTIONNARY:
                 converted_dict = convert_keys_to_str(dist)
                 converted_Q = convert_keys_to_str(Q2_temp)
                 converted_policy2 = convert_keys_to_str(policy_agent2)
-                class DictViewer(QWidget):
-                    def __init__(self, dictionary, parent=None):
+                #converted_iterative_q = convert_keys_to_str(Q_iterative)
+                #converted_dist_iterative = convert_keys_to_str(dist_iterative)
+                #converted_iterative_q_2 = convert_keys_to_str(Q_iterative_1)
+                #converted_iterative_policy_agent2_niveau_1 = convert_keys_to_str(policy_agent2_niveau_1)
+                class DynamicDualDictViewer(QWidget):
+                    def __init__(self, dict1, dict2, dict1_name="Dictionary 1", dict2_name="Dictionary 2", parent=None):
                         super().__init__(parent)
-                        self.current_dict = dictionary
-                        self.history = []
+                        self.dict1 = dict1
+                        self.dict2 = dict2
+                        self.current_dict1 = dict1
+                        self.current_dict2 = dict2
+                        self.dict1_name = dict1_name
+                        self.dict2_name = dict2_name
+
+                        self.active_history1 = []  # Active history of navigation for dict1
+                        self.active_history2 = []  # Active history of navigation for dict2
+
+                        self.passive_history1 = [(dict1, 'Root')]  # Passive history for dict1 (stores all visited states)
+                        self.passive_history2 = [(dict2, 'Root')]  # Passive history for dict2
+
+                        self.breadcrumb1 = []  # Track selected keys in dict1
+                        self.breadcrumb2 = []  # Track selected keys in dict2
 
                         self.initUI()
 
                     def initUI(self):
                         self.layout = QVBoxLayout()
 
-                        self.label = QLabel('Select Key:')
-                        self.layout.addWidget(self.label)
+                        # Create a row layout for the dictionary comparison area
+                        self.comparison_layout = QGridLayout()
 
-                        self.combo = QComboBox()
-                        self.combo.addItems(self.current_dict.keys())
-                        self.layout.addWidget(self.combo)
+                        # Breadcrumbs for tracking key paths
+                        self.breadcrumb1_label = QLabel('Path: /')
+                        self.breadcrumb2_label = QLabel('Path: /')
+                        self.comparison_layout.addWidget(self.breadcrumb1_label, 0, 0)
+                        self.comparison_layout.addWidget(self.breadcrumb2_label, 0, 1)
 
-                        self.text_edit = QTextEdit()
-                        self.layout.addWidget(self.text_edit)
+                        # Dictionary names displayed at the top
+                        self.dict1_label = QLabel(f'{self.dict1_name}')
+                        self.dict2_label = QLabel(f'{self.dict2_name}')
+                        self.comparison_layout.addWidget(self.dict1_label, 1, 0)
+                        self.comparison_layout.addWidget(self.dict2_label, 1, 1)
 
-                        self.back_button = QPushButton("Back")
-                        self.back_button.clicked.connect(self.go_back)
-                        self.back_button.setEnabled(False)
-                        self.layout.addWidget(self.back_button)
+                        # Dropdowns for selecting keys from both dictionaries
+                        self.left_list = QListWidget()
+                        self.left_list.addItems(self.current_dict1.keys())
+                        self.left_list.setSelectionMode(QListWidget.MultiSelection)
+                        self.left_list.itemSelectionChanged.connect(self.on_select_left)
+                        self.comparison_layout.addWidget(self.left_list, 2, 0)
 
-                        self.combo.activated[str].connect(self.on_select)
+                        self.right_list = QListWidget()
+                        self.right_list.addItems(self.current_dict2.keys())
+                        self.right_list.setSelectionMode(QListWidget.MultiSelection)
+                        self.right_list.itemSelectionChanged.connect(self.on_select_right)
+                        self.comparison_layout.addWidget(self.right_list, 2, 1)
 
+                        # Layout for multiple text areas to display values
+                        self.left_values_layout = QVBoxLayout()
+                        self.right_values_layout = QVBoxLayout()
+
+                        self.comparison_layout.addLayout(self.left_values_layout, 3, 0)
+                        self.comparison_layout.addLayout(self.right_values_layout, 3, 1)
+
+                        # Add back buttons for each dictionary
+                        self.left_back_button = QPushButton("Back (Left Dict)")
+                        self.left_back_button.clicked.connect(self.go_back_left)
+                        self.left_back_button.setEnabled(False)
+                        self.comparison_layout.addWidget(self.left_back_button, 4, 0)
+
+                        self.right_back_button = QPushButton("Back (Right Dict)")
+                        self.right_back_button.clicked.connect(self.go_back_right)
+                        self.right_back_button.setEnabled(False)
+                        self.comparison_layout.addWidget(self.right_back_button, 4, 1)
+
+                        # Add passive history navigation combo boxes
+                        self.left_history_combo = QComboBox()
+                        self.left_history_combo.addItems([item[1] for item in self.passive_history1])
+                        self.left_history_combo.currentIndexChanged.connect(self.on_select_passive_history_left)
+                        self.comparison_layout.addWidget(self.left_history_combo, 5, 0)
+
+                        self.right_history_combo = QComboBox()
+                        self.right_history_combo.addItems([item[1] for item in self.passive_history2])
+                        self.right_history_combo.currentIndexChanged.connect(self.on_select_passive_history_right)
+                        self.comparison_layout.addWidget(self.right_history_combo, 5, 1)
+
+                        # Set up the main layout
+                        self.layout.addLayout(self.comparison_layout)
                         self.setLayout(self.layout)
-                        self.setWindowTitle('Dictionary Viewer')
+                        self.setWindowTitle('Dynamic Dual Dictionary Viewer')
+
+                        # Apply the style to the entire application
+                        self.apply_styles()
                         self.show()
 
-                    def on_select(self, key):
-                        selected_value = self.current_dict[key]
-                        if isinstance(selected_value, dict):
-                            self.history.append((self.current_dict, self.combo.currentText()))
-                            self.current_dict = selected_value
-                            self.combo.clear()
-                            self.combo.addItems(self.current_dict.keys())
-                            self.text_edit.clear()
-                            self.back_button.setEnabled(True)
-                        else:
-                            self.text_edit.clear()
-                            self.text_edit.setText(str(selected_value))
+                    def apply_styles(self):
+                        """Apply custom styles to the widgets for a better visual appearance."""
+                        self.setStyleSheet("""
+                            QLabel {
+                                font-family: Arial;
+                                font-size: 16px;
+                                font-weight: bold;
+                                color: #333333;
+                            }
+                            QListWidget {
+                                background-color: #f0f0f0;
+                                font-family: Arial;
+                                font-size: 14px;
+                                padding: 5px;
+                                border: 1px solid #cccccc;
+                                border-radius: 10px;
+                                margin: 10px 0;
+                            }
+                            QTextEdit {
+                                background-color: #ffffff;
+                                font-family: Courier;
+                                font-size: 14px;
+                                border: 1px solid #cccccc;
+                                border-radius: 10px;
+                                padding: 10px;
+                                margin-bottom: 10px;
+                            }
+                            QPushButton {
+                                background-color: #8B4513;
+                                font-family: Arial;
+                                font-size: 14px;
+                                font-weight: bold;
+                                color: white;
+                                padding: 8px 16px;
+                                border: none;
+                                border-radius: 5px;
+                                margin: 10px 0;
+                            }
+                            QPushButton:hover {
+                                background-color: #A0522D;
+                            }
+                            QWidget {
+                                background-color: #f8f9fa;
+                            }
+                        """)
 
-                    def go_back(self):
-                        if self.history:
-                            self.current_dict, last_selected_key = self.history.pop()
-                            self.combo.clear()
-                            self.combo.addItems(self.current_dict.keys())
-                            self.combo.setCurrentText(last_selected_key)
-                            self.text_edit.clear()
-                            if not self.history:
-                                self.back_button.setEnabled(False)
+                    def clear_values(self):
+                        """Clear all the value display areas."""
+                        for i in reversed(range(self.left_values_layout.count())):
+                            self.left_values_layout.itemAt(i).widget().deleteLater()
+                        for i in reversed(range(self.right_values_layout.count())):
+                            self.right_values_layout.itemAt(i).widget().deleteLater()
+
+                    def display_values(self, dictionary, keys, layout, side):
+                        """Display the selected values in the provided layout without clearing previous values."""
+                        self.clear_values()  # Ensure only the current selection is visible
+                        for key in keys:
+                            selected_value = dictionary.get(key)
+                            text_edit = QTextEdit()
+                            text_edit.setReadOnly(True)
+                            if isinstance(selected_value, dict):
+                                text_edit.setText(f"{key}: <Nested Dictionary>")
+                                # Add to active and passive history, and allow going deeper
+                                if side == 'left':
+                                    self.active_history1.append((self.current_dict1, key))
+                                    self.passive_history1.append((self.current_dict1, key))
+                                    self.left_history_combo.addItem(f"{key}")
+                                    self.current_dict1 = selected_value
+                                    self.left_list.clear()
+                                    self.left_list.addItems(self.current_dict1.keys())
+                                    self.left_back_button.setEnabled(True)
+                                else:
+                                    self.active_history2.append((self.current_dict2, key))
+                                    self.passive_history2.append((self.current_dict2, key))
+                                    self.right_history_combo.addItem(f"{key}")
+                                    self.current_dict2 = selected_value
+                                    self.right_list.clear()
+                                    self.right_list.addItems(self.current_dict2.keys())
+                                    self.right_back_button.setEnabled(True)
+                            else:
+                                text_edit.setText(f"{key}: {str(selected_value)}")
+                            layout.addWidget(text_edit)
+
+                    def on_select_left(self):
+                        """Handle the selection of multiple keys in the left dictionary."""
+                        selected_items = self.left_list.selectedItems()
+                        selected_keys = [item.text() for item in selected_items]
+                        self.breadcrumb1 = selected_keys
+                        self.update_breadcrumbs()
+                        self.display_values(self.current_dict1, selected_keys, self.left_values_layout, 'left')
+
+                    def on_select_right(self):
+                        """Handle the selection of multiple keys in the right dictionary."""
+                        selected_items = self.right_list.selectedItems()
+                        selected_keys = [item.text() for item in selected_items]
+                        self.breadcrumb2 = selected_keys
+                        self.update_breadcrumbs()
+                        self.display_values(self.current_dict2, selected_keys, self.right_values_layout, 'right')
+
+                    def update_breadcrumbs(self):
+                        """Update the breadcrumb labels to show the current path in each dictionary."""
+                        self.breadcrumb1_label.setText(f'Path: /{" / ".join(self.breadcrumb1)}')
+                        self.breadcrumb2_label.setText(f'Path: /{" / ".join(self.breadcrumb2)}')
+
+                    def go_back_left(self):
+                        """Go back to the previous dictionary in the left list."""
+                        if self.active_history1:
+                            self.current_dict1, last_selected_key = self.active_history1.pop()
+                            self.left_list.clear()
+                            self.left_list.addItems(self.current_dict1.keys())
+                            self.breadcrumb1.pop()  # Remove the last breadcrumb entry
+                            self.update_breadcrumbs()
+                            self.clear_values()  # Clear previous values when navigating back
+                            if not self.active_history1:
+                                self.left_back_button.setEnabled(False)
+
+                    def go_back_right(self):
+                        """Go back to the previous dictionary in the right list."""
+                        if self.active_history2:
+                            self.current_dict2, last_selected_key = self.active_history2.pop()
+                            self.right_list.clear()
+                            self.right_list.addItems(self.current_dict2.keys())
+                            self.breadcrumb2.pop()  # Remove the last breadcrumb entry
+                            self.update_breadcrumbs()
+                            self.clear_values()  # Clear previous values when navigating back
+                            if not self.active_history2:
+                                self.right_back_button.setEnabled(False)
+
+                    def on_select_passive_history_left(self, index):
+                        """Handle selection from passive history for the left dictionary."""
+                        if index < len(self.passive_history1):
+                            self.current_dict1, _ = self.passive_history1[index]
+                            self.left_list.clear()
+                            self.left_list.addItems(self.current_dict1.keys())
+                            self.clear_values()
+
+                    def on_select_passive_history_right(self, index):
+                        """Handle selection from passive history for the right dictionary."""
+                        if index < len(self.passive_history2):
+                            self.current_dict2, _ = self.passive_history2[index]
+                            self.right_list.clear()
+                            self.right_list.addItems(self.current_dict2.keys())
+                            self.clear_values()
+
+
+                # Application setup
                 app = QApplication(sys.argv)
-                #viewer = DictViewer(converted_Q)
-                viewer = DictViewer(converted_policy2)
+                viewer = DynamicDualDictViewer(converted_dict, converted_policy2, dict1_name='Poliy Agent H niveau 0', dict2_name='PoliCY Agent 2 niveau 0')
                 
                 sys.exit(app.exec_())
         else:
             J, Q = self.value_iteration()
-            #print(Q)
             dist = self.boltzmann_policy(Q, eta=5)
-            #print(dist)
         
         epsilon = 1e-5
         
@@ -448,6 +642,122 @@ class MainAgent:
         print(count_sucess/N)
         """
 
+
+    def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
+        global step
+        eta = 1
+        tru_Eta = 0.01
+        self.reset(self.seed)
+        current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+        g = GoalState.red_goal
+        
+        if self.env.multiple_goal:
+            self.env.set_env_to_goal(g)
+            print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+            J, Q = self.value_iteration_multiple_goal()
+            dist = self.boltzmann_policy_multiple_goal(Q,eta=eta)
+            real_dts = self.boltzmann_policy_multiple_goal(Q,eta=tru_Eta)
+            f = open("dist.txt","w")
+        
+            # write file
+            f.write( str(dist) )
+            
+            # close file
+            f.close()
+            
+            # agent 2
+            '''
+            start = time.time()
+            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+
+            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+            f = open("J2.txt","w")
+        
+            # write file
+            f.write( str(J2_temp) )
+            
+            
+        
+            # close file
+            f.close()
+            end = time.time() - start 
+            print('Duree pour resolution : ')
+            print(end)
+            policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            '''
+    
+        else:
+            J, Q = self.value_iteration()
+            dist = self.boltzmann_policy(Q, eta=5)
+        
+        prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}
+        collect_data = []
+        count = 0
+        step.append(count)
+        N = 2000
+        
+        for n in range(N):
+            print("Data collection")
+            print(n)
+            self.reset(self.seed)
+            current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+            agent_2.step(ActionsAgent2.take_key1)
+            agent_2.step(ActionsAgent2.take_key2)
+            count = 0
+            step = []
+            step.append(count)
+            while True : 
+                #plt.ion()
+                previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+                current_world = self.env.get_world_state()
+                g = GoalState.red_goal
+                action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=real_dts))
+                #collect_data.append([current_agent_pose, current_world, action, g])
+                terminated = self.step(action)
+                
+                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                if terminated or count == 500:
+                    break
+                
+                count += 1
+                
+                belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
+                belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+                belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+                # update agent pose
+                #animate(i=1)
+                step.append(count)
+                prior = belief
+            #plt.ioff() 
+            
+         
+        '''
+        data = np.array([[0.1, 0.5, 0.3], [0.4, 0.2, 0.6], [0.7, 0.8, 0.9]])
+        row_labels = ['State 1', 'State 2', 'State 3']
+        col_labels = ['Action A', 'Action B', 'Action C']
+
+        # Plotting the table
+        fig, ax = plt.subplots()
+        ax.axis('tight')
+        ax.axis('off')
+
+        # Create the table
+        table = ax.table(cellText=data, rowLabels=row_labels, colLabels=col_labels, cellLoc='center', loc='center')
+
+        # Styling (optional)
+        table.scale(1, 1.5)  # Scale the table to make it more readable
+        table.auto_set_font_size(False)
+        table.set_fontsize(12)
+
+        plt.show()
+        '''
+        estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
+        #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
+        estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=0.75)
+        #estimator.maximum_expectation_iteration(datas=collect_data)
+        estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
+        
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
         print(f"step={self.env.step_count}, reward={reward:.2f}")
@@ -488,15 +798,13 @@ class MainAgent:
         else:
             return q, best_a, best_value
         """
-    
+     
     def initializeJ_Q(self, g=GoalState.green_goal):
         states = self.env.get_all_states()
         Q= {}
         J = {}
         big_change ={}
         if self.env.multiple_goal :
-            
-            
             for i in range(len(ALL_POSSIBLE_GOAL)):
                 Q[ALL_POSSIBLE_GOAL[i]] = {}
                 J[ALL_POSSIBLE_GOAL[i]] = {}
@@ -528,14 +836,100 @@ class MainAgent:
                             Q[ALL_POSSIBLE_GOAL][w][s][a] = 0
         return J, Q, states, big_change 
     
+    def initializeJ_Q_iterative_game(self, agent, g = GoalState.green_goal) :
+        states = self.env.get_all_states()
+        Q= {}
+        J = {}
+        big_change ={}
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            Q[ALL_POSSIBLE_GOAL[i]] = {}
+            J[ALL_POSSIBLE_GOAL[i]] = {}
+            big_change[ALL_POSSIBLE_GOAL[i]] = {}
+            for belief in agent.discretize_belief:
+                Q[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                J[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                big_change[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    Q[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    J[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    big_change[ALL_POSSIBLE_GOAL[i]][belief][w] = 0
+                    for s in states:
+                        self.env.set_state(s)
+                        J[ALL_POSSIBLE_GOAL[i]][belief][w][s]= 0
+                        Q[ALL_POSSIBLE_GOAL[i]][belief][w][s] = {}
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            Q[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = 0
+        return J, Q, states, big_change 
+                            
     def bellman_equation(self,J, g, w, a, s):
         next_state_reward = []
         transitions = self.env.get_transition_probs(a, cost_value=1)
         for (prob, r, state_prime) in transitions:
-            #print(s)
-            #print(state_prime)
             reward = prob*(r + self.gamma*J[g][w][state_prime])
             next_state_reward.append(reward)
+        return next_state_reward
+    
+    def world_dynamic_update(self, action, current_world):
+        world_prime = None
+        if not self.env.multiple_goal:
+            if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.take_key and current_world == WorldSate.open_door :
+                world_prime = WorldSate.open_door
+            if action == ActionsAgent2.nothing:
+                world_prime = current_world
+        else:
+            if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
+                world_prime = (WorldSate.open_door1, current_world[1])
+            elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
+                world_prime = (current_world[0], WorldSate.open_door2)
+            elif action == ActionsAgent2.nothing:
+                world_prime = current_world
+            else:
+                world_prime = current_world
+        return world_prime
+    
+    def belief_state(self, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = previous_dist_g
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            conditional_state_world = 0
+            self.env.set_state(previous_state)
+            for a in ALL_POSSIBLE_ACTIONS:
+                transition = self.env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        return current_dist
+    
+    def belief_state_discretize(self, belief, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE
+        current_dist = {ALL_POSSIBLE_GOAL[0]: belief, ALL_POSSIBLE_GOAL[1]: 1-belief}
+        current_dist = self.belief_state(previous_dist_g=current_dist, dist_boltzmann=dist_boltzmann, w=w, s=s, previous_state=previous_state)
+        return current_dist[ALL_POSSIBLE_GOAL[0]]
+    
+    def bellman_equation_iterative_game(self,agent, p_action, J, g, belief, w, a, s):
+        next_state_reward = []
+        optimal_action2 = agent.policy(belief, w, s)
+        #print(optimal_action2)
+        self.env.check_move(action=optimal_action2, w=w)
+        transitions = self.env.get_transition_probs( action=a, cost_value=1)
+        for (prob, r, state_prime) in transitions:    
+            world_prime = self.world_dynamic_update(optimal_action2, w)
+            next_belief = self.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
+            next_belief = agent.approx_prob_to_belief(next_belief)
+            r = self.env.check_move(action=a,w=world_prime,cost_value=1)
+            reward = prob*(r[1] + self.gamma*J[g][next_belief][world_prime][state_prime])
+            next_state_reward.append(reward)
+        #print(next_state_reward)
+        self.env.check_move(action=optimal_action2, w=w)
         return next_state_reward
     
     def initialize_variation(self):
@@ -554,7 +948,21 @@ class MainAgent:
                     big_change[ALL_POSSIBLE_GOAL][w] = 0
                     
         return big_change 
-    
+
+    def initialize_variation_iterative_game(self, agent):
+            big_change = {}
+            if self.env.multiple_goal:
+                
+                
+                for i in range(len(ALL_POSSIBLE_GOAL)):
+                    big_change[ALL_POSSIBLE_GOAL[i]] = {}
+                    for belief in agent.discretize_belief:
+                        big_change[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                        for w in ALL_POSSIBLE_WOLRD:
+                            big_change[ALL_POSSIBLE_GOAL[i]][belief][w] = 0
+                        
+            return big_change 
+
     def variation_superiorTothreshold(self, variation):
         breaking_flag = True
         if self.env.multiple_goal:
@@ -574,7 +982,21 @@ class MainAgent:
                     else:
                         breaking_flag = False * breaking_flag
         return breaking_flag
-                    
+    
+    def variation_superiorTothreshold_iterative_game(self, agent, variation):
+        breaking_flag = True
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            for belief in agent.discretize_belief:
+                for w in ALL_POSSIBLE_WOLRD:
+                    #print(variation[ALL_POSSIBLE_GOAL[i]][belief][w])
+                    if variation[ALL_POSSIBLE_GOAL[i]][belief][w] <= self.threshold:
+                        breaking_flag = True * breaking_flag
+                    else:
+                        
+                        breaking_flag = False * breaking_flag
+        return breaking_flag
+
+    
     def value_iteration(self, g=GoalState.green_goal):
         J, Q, states, big_change = self.initializeJ_Q()
         g =g
@@ -629,6 +1051,46 @@ class MainAgent:
                         #close the door
                     self.env.open_door_manually(w)
             if self.variation_superiorTothreshold(big_change):
+                break
+            number_iter += 1
+        #print(number_iter)
+        return J,Q      
+    
+    def value_iteration_iterative_game(self, agent, p_action):
+        # set by default
+        self.env.set_env_to_goal(GoalState.green_goal)
+        J, Q, states, big_change = self.initializeJ_Q_iterative_game(agent=agent)
+        number_iter = 0
+        temp = {}
+        while True:
+            big_change = self.initialize_variation_iterative_game(agent=agent)
+            initial_time = time.time()
+            for g in ALL_POSSIBLE_GOAL:
+                self.env.set_env_to_goal(g)
+                for belief in agent.discretize_belief: 
+                    for w in ALL_POSSIBLE_WOLRD:
+                        self.env.open_door_manually(w)
+                        #if self.status[w][g] is False: # we only update the value iteration for value function that didn't converge yet
+                        for s in self.env.get_states_non_terminated():
+                            self.env.set_state(s)
+                            # open the door in Value iteration
+                            temp = J[g][belief][w][s]
+                            #do things to set goals
+                            for a in ALL_POSSIBLE_ACTIONS:
+                                next_state_reward = self.bellman_equation_iterative_game(agent=agent, p_action=p_action, J=J, g=g, belief=belief, w=w, a=a, s=s) 
+                                #print(next_state_reward)
+                                Q[g][belief][w][s][a]=((np.sum(next_state_reward)))
+                        
+                            J[g][belief][w][s] = max(Q[g][belief][w][s].values())
+                
+                            big_change[g][belief][w] = max(big_change[g][belief][w], np.abs(temp-J[g][belief][w][s]))
+                        #close the door
+                    self.env.open_door_manually(w)
+            value_iteration_elapsed_time = initial_time - time.time()
+            print('Elpased time for value iteration with multiple goal:')
+            print(value_iteration_elapsed_time)
+            print(number_iter)
+            if self.variation_superiorTothreshold_iterative_game(agent=agent, variation=big_change):
                 break
             number_iter += 1
         print(number_iter)
@@ -732,7 +1194,6 @@ class MainAgent:
             self.env.open_door_manually(w)
             dist[w] = {}
             total_prob[w] = {}
-            #print(w)
             g = GoalState.green_goal
             for s in states:
                 self.env.set_state(s)
@@ -745,7 +1206,6 @@ class MainAgent:
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
                 for a in self.env.get_possible_move(s):
-                    #print(a)
                     # use max normalization method where we use exp(array - max(array))
                     # instead of exp(arr) which can cause infinite value
                     # we can improve this part of the code
@@ -770,7 +1230,6 @@ class MainAgent:
                 self.env.open_door_manually(w)
                 dist[ALL_POSSIBLE_GOAL[i]][w] = {}
                 total_prob[ALL_POSSIBLE_GOAL[i]][w] = {}
-                #print(w)
                 for s in states:
                     self.env.set_state(s)
                     dist[ALL_POSSIBLE_GOAL[i]][w][s] = {}
@@ -779,7 +1238,6 @@ class MainAgent:
                         dist[ALL_POSSIBLE_GOAL[i]][w][s][a] = 0
                         #for a in ALL_POSSIBLE_ACTIONS :
                     for a in ALL_POSSIBLE_ACTIONS:
-                        #print(a)
                         # use max normalization method where we use exp(array - max(array))
                         # instead of exp(arr) which can cause infinite value
                         # we can improve this part of the code
@@ -790,7 +1248,40 @@ class MainAgent:
                 # CLOSE the door in Value iteration
                 self.env.open_door_manually(w)
         return dist
-    
+
+    def boltzmann_policy_iterative_game(self, agent, Q, eta):
+        #  IMPROVE INITIALIZATION OF DIC 
+        dist = {}
+        total_prob = {}
+        
+        states = self.env.get_all_states()
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            dist[ALL_POSSIBLE_GOAL[i]] = {}
+            total_prob[ALL_POSSIBLE_GOAL[i]] = {}
+            for belief in agent.discretize_belief:
+                dist[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                total_prob[ALL_POSSIBLE_GOAL[i]][belief] = {}
+                for w in ALL_POSSIBLE_WOLRD:
+                    self.env.open_door_manually(w)
+                    dist[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    total_prob[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
+                    for s in states:
+                        self.env.set_state(s)
+                        dist[ALL_POSSIBLE_GOAL[i]][belief][w][s] = {}
+                        total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] = 0
+                        for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = 0
+                        for a in ALL_POSSIBLE_ACTIONS :
+                            # use max normalization method where we use exp(array - max(array))
+                            # instead of exp(arr) which can cause infinite value
+                            # we can improve this part of the code
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (np.exp(eta*(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] - max(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s].values()))))
+                            total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] += dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a]
+                        for a in ALL_POSSIBLE_ACTIONS:
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a])/(total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s])
+                    # CLOSE the door in Value iteration
+                    self.env.open_door_manually(w)
+        return dist
     
     def generate_action(self, state, worldState, goal, dist):
         possible_action = [a for a in dist[goal][worldState][state].keys()]
@@ -798,7 +1289,214 @@ class MainAgent:
         generated_action = np.random.choice(possible_action, p=prob)
         return generated_action
 
+    def generate_action_iterative_game(self, belief, state, worldState, goal, dist):
+        possible_action = [a for a in dist[goal][belief][worldState][state].keys()]
+        prob = [dist[goal][belief][worldState][state][a] for a in dist[goal][belief][worldState][state].keys()]
+        generated_action = np.random.choice(possible_action, p=prob)
+        return generated_action
+  
+class BoltzmanEstimator:
+    "EM or gradient descent estimation for boltzmann policy temperature variable beta"
+    def __init__(self, data, q_function, boltzman_policy, initial_beta=9):
+        
+        # The format of the data is ([x_t, w^{'}_t, a^H,g]; [x_t, w^{'}_t, a^H,g])
+        self.all_data = data
+        self.initial_beta = initial_beta
+        self.optimized_beta = initial_beta
+        self.history_beta_gradient = []
+        self.history_beta_em = []
+        self.q_function = q_function
+        self.boltzman_policy = boltzman_policy
+        self.changing_data = []
+    
+    def gradient_iteration(self, datas, n_iterations=1000000, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
+        gradient = 0
+        iteration = 0
+        beta_old = 1
+        beta = self.initial_beta
+        self.history_beta_gradient.append(beta)
+        convergeance = True
+        erreur = 1
+        debut = time.time()
+        while(erreur >= epsilon):
+            gradient = 0
+            for data in datas:
+                goal = data[3]
+                a_t = data[2]
+                w_t = data[1]
+                x_t = data[0]
+                q = self.q_function[goal][w_t][x_t][a_t]
+                max_q = max(self.q_function[goal][w_t][x_t].values())
+                exp_sum = sum(np.exp(beta* (self.q_function[goal][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                numerateur = sum(self.q_function[goal][w_t][x_t][a]* np.exp(beta*(self.q_function[goal][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                gradient += q - (numerateur/exp_sum)
 
+            #update old value
+            beta_old = beta
+            #update new beta 
+            beta +=learning_rate*gradient
+            #compute error
+            erreur = abs(beta-beta_old)
+            #print(erreur)
+            if iteration % 2000 == 0:
+                #update learnig rate
+                learning_rate = learning_rate*decreasing_step
+                print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+            if iteration == n_iterations:
+                convergeance = False
+                break
+            iteration += 1
+            self.history_beta_gradient.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}, erreur = {erreur}, beta old = {beta_old}, duration in second = {duration}")
+        if convergeance is True:
+            self.optimized_beta = beta
+            print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+
+    def gradient_iteration_hidden_goal(self, datas, n_iterations=1000000, learning_rate=1e-7, decreasing_step=0.75, epsilon=1e-12):
+        gradient = 0
+        iteration = 0
+        beta_old = 1
+        beta = self.initial_beta
+        self.history_beta_gradient.append(beta)
+        convergeance = True
+        erreur = 1
+        debut = time.time()
+        while(erreur >= epsilon):
+            gradient = 0
+            for data in datas:
+                #goal = data[3]
+                for g in ALL_POSSIBLE_GOAL:
+                    if g == ALL_POSSIBLE_GOAL[0]:
+                        belief_t = data[4]
+                        
+                    elif g == ALL_POSSIBLE_GOAL[1]:
+                        belief_t = 1 - data[4]
+                    a_t = data[2]
+                    w_t = data[1]
+                    x_t = data[0]
+                    q = (self.q_function[g][w_t][x_t][a_t])
+                    max_q = max(self.q_function[g][w_t][x_t].values())
+                    exp_sum = sum(np.exp(beta* (self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                    numerateur = sum(self.q_function[g][w_t][x_t][a]* np.exp(beta*(self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                    gradient += belief_t*(q - (numerateur/exp_sum))
+
+            #update old value
+            beta_old = beta
+            #update new beta 
+            beta +=learning_rate*gradient
+            #compute error
+            erreur = abs(beta-beta_old)
+            #print(erreur)
+            if iteration % 2000 == 0:
+                #update learnig rate
+                learning_rate = learning_rate*decreasing_step
+                print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+            if iteration == n_iterations:
+                convergeance = False
+                break
+            iteration += 1
+            self.history_beta_gradient.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}, erreur = {erreur}, beta old = {beta_old}, duration in second = {duration}")
+        if convergeance is True:
+            self.optimized_beta = beta
+            print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+    def maximum_expectation_iteration(self, datas, epsilon=1e-12):
+        iteration = 0
+        self.beta_old = np.inf
+        beta = self.initial_beta
+        self.history_beta_em.append(beta)
+        self.all_data = datas
+        erreur = 1
+        self.history_beta_em.append(beta)
+        debut = time.time()
+        while(erreur >= epsilon):
+            #print(beta)
+            self.changing_data = datas
+            #update beta
+            self.beta_old = beta
+            beta = root(self.func_to_optimize, 12e-6).x[0]
+            self.history_beta_em.append(beta)
+            #print(beta)
+                
+            print(f"Iteration {iteration}: beta = {beta}, beta old = {self.beta_old}")
+            #compute error
+            erreur = abs(beta-self.beta_old)
+            #print(erreur)
+            iteration += 1
+            self.history_beta_em.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
+
+    
+    def func_to_optimize(self, beta):
+        big_tot = 0
+        for data in self.changing_data:
+            goal = data[3]
+            a_t = data[2]
+            w_t = data[1]
+            x_t = data[0]
+            max_q = max(self.q_function[data[3]][w_t][x_t].values())
+            action_probs = np.array([np.exp(self.beta_old *(self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS])
+            action_probs /= action_probs.sum()  # Normalize to get probabilities
+            q = self.q_function[data[3]][w_t][x_t][a_t]
+            
+            exp_sum = sum(np.exp(beta* (self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+            numerateur = sum(self.q_function[data[3]][w_t][x_t][a]* np.exp(beta*(self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+            tot=0
+            for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
+                tot += action_probs[i] *(q - (numerateur/exp_sum))
+            big_tot += tot
+        return big_tot
+            
+    
+    def plot_beta_Estimation(self, gradient=True, em=False, groundtruth=0.01):
+        if gradient is True:
+            plt.plot(self.history_beta_gradient, marker='o', linestyle='-')
+            plt.xlabel('Iteration')
+            plt.ylabel('value')
+            plt.title('EStimation Beta with gradient')
+            
+            # Add a horizontal reference line 
+            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+            plt.legend()
+            
+        elif em:
+            plt.plot(self.history_beta_em, marker='o', linestyle='-')
+            plt.xlabel('Iteration')
+            plt.ylabel('value')
+            plt.title('EStimation Beta with EM')
+            
+            # Add a horizontal reference line 
+            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+            plt.legend()
+        plt.show() 
+    
+    def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = previous_dist_g
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            conditional_state_world = 0
+            env.set_state(previous_state)
+            for a in env.get_possible_move(previous_state):
+                transition = env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+            
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        return current_dist
+  
+    
 if __name__ == "__main__":
     import argparse
 
@@ -850,7 +1548,6 @@ if __name__ == "__main__":
     )
     
     #env = EmptyReducedEnv(render_mode="human", size =16)
-    #print(env.reduced)
     # TODO: check if this can be removed
     if args.agent_view:
         print("Using agent view")
@@ -859,4 +1556,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start(agent_2)
+    agent_1.start_simBeta(agent_2)

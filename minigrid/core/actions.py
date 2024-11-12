@@ -605,7 +605,7 @@ class RobotObservationPOMDP(pomdp_py.Observation):
 class RobotTransitionModel(pomdp_py.TransitionModel):
     """We assume that the robot control is perfect and transitions are deterministic."""
 
-    def __init__(self, dim, env, probability, epsilon=1e-5, multiple_goal=True):
+    def __init__(self, dim, env, probability, epsilon=1e-9, multiple_goal=True):
         """
         dim (tuple): a tuple (width, length) for the dimension of the world
         """
@@ -912,13 +912,13 @@ class RobotAgent(pomdp_py.Agent):
         self._history = None
                 
 class Robotproblem(pomdp_py.POMDP):
-    def __init__(self, word1, world2, pose, goal, env, dim, human_probability, epsilon=1e-9, initial_prob=0.5, multiple_goal=True):
+    def __init__(self, word1, world2, pose, goal, env, dim, human_probability, epsilon=1e-6, initial_prob=0.5, multiple_goal=True):
         if multiple_goal:
             init_human_state = StatePOMDP(world=word1, world2=world2, pose=pose, goal=goal)
         else:
             init_human_state = StatePOMDP(world=word1, pose=pose, goal=goal)
         
-        robot_agent = RobotAgent(env=env, init_robot_state=init_human_state, dim=dim, epsilon=1e-9, initial_prob=initial_prob, human_probability=human_probability, multiple_goal=multiple_goal)
+        robot_agent = RobotAgent(env=env, init_robot_state=init_human_state, dim=dim, epsilon=1e-5, initial_prob=initial_prob, human_probability=human_probability, multiple_goal=multiple_goal)
         grid_env = RobotGridEnvironment(env=env, init_true_state=init_human_state, dim=dim, epsilon=epsilon, human_probability=human_probability, multiple_goal=multiple_goal)
         super().__init__(
             robot_agent,

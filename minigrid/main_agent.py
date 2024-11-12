@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import sys
 import ast
+from scipy.optimize import fsolve, root
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel, QComboBox,
                              QListWidget, QTextEdit, QPushButton, QGridLayout)
 from PyQt5.QtCore import Qt
@@ -69,7 +70,7 @@ ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.op
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 #ALL_POSSIBLE_GOAL = GoalState.green_goal
 
-'''
+
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
         #PROCESS ENVIRONEMENT IF POSSIBLE 
@@ -86,19 +87,18 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
             
-        current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
-'''
 
+belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+step = []
 '''
 plt.style.use('fivethirtyeight')
-step = []
-belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}\
-    
 def run_conv(args):
     agent, filename, discount = args
     to_pomdp_file(agent, filename, discount)
-
+'''
 def animate(i):
     plt.cla()
     plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal', color='green')
@@ -108,7 +108,7 @@ def animate(i):
     plt.tight_layout()
     plt.draw()
     plt.pause(0.05)
-'''
+
 # plt.tight_layout()
 # plt.show()
 class MainAgent:
@@ -642,6 +642,122 @@ class MainAgent:
         print(count_sucess/N)
         """
 
+
+    def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
+        global step
+        eta = 1
+        tru_Eta = 0.01
+        self.reset(self.seed)
+        current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+        g = GoalState.red_goal
+        
+        if self.env.multiple_goal:
+            self.env.set_env_to_goal(g)
+            print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+            J, Q = self.value_iteration_multiple_goal()
+            dist = self.boltzmann_policy_multiple_goal(Q,eta=eta)
+            real_dts = self.boltzmann_policy_multiple_goal(Q,eta=tru_Eta)
+            f = open("dist.txt","w")
+        
+            # write file
+            f.write( str(dist) )
+            
+            # close file
+            f.close()
+            
+            # agent 2
+            '''
+            start = time.time()
+            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
+
+            J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
+            f = open("J2.txt","w")
+        
+            # write file
+            f.write( str(J2_temp) )
+            
+            
+        
+            # close file
+            f.close()
+            end = time.time() - start 
+            print('Duree pour resolution : ')
+            print(end)
+            policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist)
+            '''
+    
+        else:
+            J, Q = self.value_iteration()
+            dist = self.boltzmann_policy(Q, eta=5)
+        
+        prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}
+        collect_data = []
+        count = 0
+        step.append(count)
+        N = 2000
+        
+        for n in range(N):
+            print("Data collection")
+            print(n)
+            self.reset(self.seed)
+            current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+            agent_2.step(ActionsAgent2.take_key1)
+            agent_2.step(ActionsAgent2.take_key2)
+            count = 0
+            step = []
+            step.append(count)
+            while True : 
+                #plt.ion()
+                previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+                current_world = self.env.get_world_state()
+                g = GoalState.red_goal
+                action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=real_dts))
+                #collect_data.append([current_agent_pose, current_world, action, g])
+                terminated = self.step(action)
+                
+                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                if terminated or count == 500:
+                    break
+                
+                count += 1
+                
+                belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
+                belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+                belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+                # update agent pose
+                #animate(i=1)
+                step.append(count)
+                prior = belief
+            #plt.ioff() 
+            
+         
+        '''
+        data = np.array([[0.1, 0.5, 0.3], [0.4, 0.2, 0.6], [0.7, 0.8, 0.9]])
+        row_labels = ['State 1', 'State 2', 'State 3']
+        col_labels = ['Action A', 'Action B', 'Action C']
+
+        # Plotting the table
+        fig, ax = plt.subplots()
+        ax.axis('tight')
+        ax.axis('off')
+
+        # Create the table
+        table = ax.table(cellText=data, rowLabels=row_labels, colLabels=col_labels, cellLoc='center', loc='center')
+
+        # Styling (optional)
+        table.scale(1, 1.5)  # Scale the table to make it more readable
+        table.auto_set_font_size(False)
+        table.set_fontsize(12)
+
+        plt.show()
+        '''
+        estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
+        #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
+        estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=0.75)
+        #estimator.maximum_expectation_iteration(datas=collect_data)
+        estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
+        
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
         print(f"step={self.env.step_count}, reward={reward:.2f}")
@@ -1178,6 +1294,208 @@ class MainAgent:
         prob = [dist[goal][belief][worldState][state][a] for a in dist[goal][belief][worldState][state].keys()]
         generated_action = np.random.choice(possible_action, p=prob)
         return generated_action
+  
+class BoltzmanEstimator:
+    "EM or gradient descent estimation for boltzmann policy temperature variable beta"
+    def __init__(self, data, q_function, boltzman_policy, initial_beta=9):
+        
+        # The format of the data is ([x_t, w^{'}_t, a^H,g]; [x_t, w^{'}_t, a^H,g])
+        self.all_data = data
+        self.initial_beta = initial_beta
+        self.optimized_beta = initial_beta
+        self.history_beta_gradient = []
+        self.history_beta_em = []
+        self.q_function = q_function
+        self.boltzman_policy = boltzman_policy
+        self.changing_data = []
+    
+    def gradient_iteration(self, datas, n_iterations=1000000, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
+        gradient = 0
+        iteration = 0
+        beta_old = 1
+        beta = self.initial_beta
+        self.history_beta_gradient.append(beta)
+        convergeance = True
+        erreur = 1
+        debut = time.time()
+        while(erreur >= epsilon):
+            gradient = 0
+            for data in datas:
+                goal = data[3]
+                a_t = data[2]
+                w_t = data[1]
+                x_t = data[0]
+                q = self.q_function[goal][w_t][x_t][a_t]
+                max_q = max(self.q_function[goal][w_t][x_t].values())
+                exp_sum = sum(np.exp(beta* (self.q_function[goal][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                numerateur = sum(self.q_function[goal][w_t][x_t][a]* np.exp(beta*(self.q_function[goal][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                gradient += q - (numerateur/exp_sum)
+
+            #update old value
+            beta_old = beta
+            #update new beta 
+            beta +=learning_rate*gradient
+            #compute error
+            erreur = abs(beta-beta_old)
+            #print(erreur)
+            if iteration % 2000 == 0:
+                #update learnig rate
+                learning_rate = learning_rate*decreasing_step
+                print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+            if iteration == n_iterations:
+                convergeance = False
+                break
+            iteration += 1
+            self.history_beta_gradient.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}, erreur = {erreur}, beta old = {beta_old}, duration in second = {duration}")
+        if convergeance is True:
+            self.optimized_beta = beta
+            print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+
+    def gradient_iteration_hidden_goal(self, datas, n_iterations=1000000, learning_rate=1e-7, decreasing_step=0.75, epsilon=1e-12):
+        gradient = 0
+        iteration = 0
+        beta_old = 1
+        beta = self.initial_beta
+        self.history_beta_gradient.append(beta)
+        convergeance = True
+        erreur = 1
+        debut = time.time()
+        while(erreur >= epsilon):
+            gradient = 0
+            for data in datas:
+                #goal = data[3]
+                for g in ALL_POSSIBLE_GOAL:
+                    if g == ALL_POSSIBLE_GOAL[0]:
+                        belief_t = data[4]
+                        
+                    elif g == ALL_POSSIBLE_GOAL[1]:
+                        belief_t = 1 - data[4]
+                    a_t = data[2]
+                    w_t = data[1]
+                    x_t = data[0]
+                    q = (self.q_function[g][w_t][x_t][a_t])
+                    max_q = max(self.q_function[g][w_t][x_t].values())
+                    exp_sum = sum(np.exp(beta* (self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                    numerateur = sum(self.q_function[g][w_t][x_t][a]* np.exp(beta*(self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                    gradient += belief_t*(q - (numerateur/exp_sum))
+
+            #update old value
+            beta_old = beta
+            #update new beta 
+            beta +=learning_rate*gradient
+            #compute error
+            erreur = abs(beta-beta_old)
+            #print(erreur)
+            if iteration % 2000 == 0:
+                #update learnig rate
+                learning_rate = learning_rate*decreasing_step
+                print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+            if iteration == n_iterations:
+                convergeance = False
+                break
+            iteration += 1
+            self.history_beta_gradient.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}, erreur = {erreur}, beta old = {beta_old}, duration in second = {duration}")
+        if convergeance is True:
+            self.optimized_beta = beta
+            print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+            
+    def maximum_expectation_iteration(self, datas, epsilon=1e-12):
+        iteration = 0
+        self.beta_old = np.inf
+        beta = self.initial_beta
+        self.history_beta_em.append(beta)
+        self.all_data = datas
+        erreur = 1
+        self.history_beta_em.append(beta)
+        debut = time.time()
+        while(erreur >= epsilon):
+            #print(beta)
+            self.changing_data = datas
+            #update beta
+            self.beta_old = beta
+            beta = root(self.func_to_optimize, 12e-6).x[0]
+            self.history_beta_em.append(beta)
+            #print(beta)
+                
+            print(f"Iteration {iteration}: beta = {beta}, beta old = {self.beta_old}")
+            #compute error
+            erreur = abs(beta-self.beta_old)
+            #print(erreur)
+            iteration += 1
+            self.history_beta_em.append(beta)
+        duration = time.time() - debut
+        print(f"Iteration {iteration}: beta = {beta}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
+
+    
+    def func_to_optimize(self, beta):
+        big_tot = 0
+        for data in self.changing_data:
+            goal = data[3]
+            a_t = data[2]
+            w_t = data[1]
+            x_t = data[0]
+            max_q = max(self.q_function[data[3]][w_t][x_t].values())
+            action_probs = np.array([np.exp(self.beta_old *(self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS])
+            action_probs /= action_probs.sum()  # Normalize to get probabilities
+            q = self.q_function[data[3]][w_t][x_t][a_t]
+            
+            exp_sum = sum(np.exp(beta* (self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+            numerateur = sum(self.q_function[data[3]][w_t][x_t][a]* np.exp(beta*(self.q_function[data[3]][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+            tot=0
+            for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
+                tot += action_probs[i] *(q - (numerateur/exp_sum))
+            big_tot += tot
+        return big_tot
+            
+    
+    def plot_beta_Estimation(self, gradient=True, em=False, groundtruth=0.01):
+        if gradient is True:
+            plt.plot(self.history_beta_gradient, marker='o', linestyle='-')
+            plt.xlabel('Iteration')
+            plt.ylabel('value')
+            plt.title('EStimation Beta with gradient')
+            
+            # Add a horizontal reference line 
+            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+            plt.legend()
+            
+        elif em:
+            plt.plot(self.history_beta_em, marker='o', linestyle='-')
+            plt.xlabel('Iteration')
+            plt.ylabel('value')
+            plt.title('EStimation Beta with EM')
+            
+            # Add a horizontal reference line 
+            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+            plt.legend()
+        plt.show() 
+    
+    def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        current_dist = previous_dist_g
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            conditional_state_world = 0
+            env.set_state(previous_state)
+            for a in env.get_possible_move(previous_state):
+                transition = env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+            
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        return current_dist
+  
     
 if __name__ == "__main__":
     import argparse
@@ -1238,4 +1556,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start(agent_2)
+    agent_1.start_simBeta(agent_2)

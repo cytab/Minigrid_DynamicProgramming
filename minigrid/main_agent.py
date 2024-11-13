@@ -72,24 +72,23 @@ ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
 
 
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
-        # be carful of dynamic of w that needs the action of agent 2
-        #PROCESS ENVIRONEMENT IF POSSIBLE 
-        current_dist = previous_dist_g
-        normalizing_factor = 0
-        for i in range(len(ALL_POSSIBLE_GOAL)):
-            conditional_state_world = 0
-            env.set_state(previous_state)
-            for a in env.get_possible_move(previous_state):
-                transition = env.get_transition_probs(a, cost_value=1)
-                for (_,_,state_prime) in transition:
-                    if state_prime == s:
-                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
-            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
-            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
-            
-        if normalizing_factor > 0:
-            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
-        return current_dist
+    # be carful of dynamic of w that needs the action of agent 2
+    #PROCESS ENVIRONEMENT IF POSSIBLE 
+    current_dist = previous_dist_g
+    normalizing_factor = 0
+    for i in range(len(ALL_POSSIBLE_GOAL)):
+        conditional_state_world = 0
+        env.set_state(previous_state)
+        for a in env.get_possible_move(previous_state):
+            transition = env.get_transition_probs(a, cost_value=1)
+            for (_,_,state_prime) in transition:
+                if state_prime == s:
+                    conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
+        current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+        normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+    if normalizing_factor > 0:
+        current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+    return current_dist
 
 belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
 step = []
@@ -708,21 +707,22 @@ class MainAgent:
             step.append(count)
             while True : 
                 #plt.ion()
+                if n > N/2:
+                    g = GoalState.green_goal
                 previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
                 current_world = self.env.get_world_state()
                 g = GoalState.red_goal
                 action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=real_dts))
-                #collect_data.append([current_agent_pose, current_world, action, g])
+                collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
                 terminated = self.step(action)
                 
                 current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                 if terminated or count == 500:
                     break
-                
                 count += 1
                 
                 belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
-                collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
+                
                 belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
                 belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
                 # update agent pose
@@ -753,10 +753,11 @@ class MainAgent:
         plt.show()
         '''
         estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
-        #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
-        estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=0.75)
+        estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
+        estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=1)
         #estimator.maximum_expectation_iteration(datas=collect_data)
-        estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
+        #estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
+        estimator.plot_beta_Estimation_com(gradient=True, groundtruth=tru_Eta, em=False)
         
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -1304,12 +1305,14 @@ class BoltzmanEstimator:
         self.initial_beta = initial_beta
         self.optimized_beta = initial_beta
         self.history_beta_gradient = []
+        self.history_beta_gradient_hidden_goal = []
         self.history_beta_em = []
+        self.history_beta_em_hidden_goal = []
         self.q_function = q_function
         self.boltzman_policy = boltzman_policy
         self.changing_data = []
     
-    def gradient_iteration(self, datas, n_iterations=1000000, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
+    def gradient_iteration(self, datas, n_iterations=1e6, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
         gradient = 0
         iteration = 0
         beta_old = 1
@@ -1354,12 +1357,12 @@ class BoltzmanEstimator:
             self.optimized_beta = beta
             print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
 
-    def gradient_iteration_hidden_goal(self, datas, n_iterations=1000000, learning_rate=1e-7, decreasing_step=0.75, epsilon=1e-12):
+    def gradient_iteration_hidden_goal(self, datas, n_iterations=1e6, learning_rate=1e-8, decreasing_step=0.75, epsilon=1e-12):
         gradient = 0
         iteration = 0
         beta_old = 1
         beta = self.initial_beta
-        self.history_beta_gradient.append(beta)
+        self.history_beta_gradient_hidden_goal.append(beta)
         convergeance = True
         erreur = 1
         debut = time.time()
@@ -1368,11 +1371,8 @@ class BoltzmanEstimator:
             for data in datas:
                 #goal = data[3]
                 for g in ALL_POSSIBLE_GOAL:
-                    if g == ALL_POSSIBLE_GOAL[0]:
-                        belief_t = data[4]
-                        
-                    elif g == ALL_POSSIBLE_GOAL[1]:
-                        belief_t = 1 - data[4]
+                    
+                    belief_t = data[4] if g == ALL_POSSIBLE_GOAL[0] else 1 - data[4]
                     a_t = data[2]
                     w_t = data[1]
                     x_t = data[0]
@@ -1398,7 +1398,7 @@ class BoltzmanEstimator:
                 convergeance = False
                 break
             iteration += 1
-            self.history_beta_gradient.append(beta)
+            self.history_beta_gradient_hidden_goal.append(beta)
         duration = time.time() - debut
         print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}, erreur = {erreur}, beta old = {beta_old}, duration in second = {duration}")
         if convergeance is True:
@@ -1454,9 +1454,52 @@ class BoltzmanEstimator:
         return big_tot
             
     
-    def plot_beta_Estimation(self, gradient=True, em=False, groundtruth=0.01):
+    def plot_beta_Estimation(self, gradient=True, em=False, hidden_goal_comp=False, groundtruth=0.01):
         if gradient is True:
-            plt.plot(self.history_beta_gradient, marker='o', linestyle='-')
+            if hidden_goal_comp is False:
+                plt.plot(self.history_beta_gradient, marker='o', linestyle='-')
+                plt.xlabel('Iteration')
+                plt.ylabel('value')
+                plt.title('EStimation Beta with gradient')
+                
+                # Add a horizontal reference line 
+                plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+                plt.legend()
+            else:
+                plt.plot(self.history_beta_gradient_hidden_goal, marker='o', linestyle='-')
+                plt.xlabel('Iteration')
+                plt.ylabel('value')
+                plt.title('EStimation Beta with gradient')
+                
+                # Add a horizontal reference line 
+                plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+                plt.legend()
+            
+        elif em:
+            if hidden_goal_comp is False:
+                plt.plot(self.history_beta_em, marker='o', linestyle='-')
+                plt.xlabel('Iteration')
+                plt.ylabel('value')
+                plt.title('EStimation Beta with EM')
+                
+                # Add a horizontal reference line 
+                plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+                plt.legend()
+            else:
+                plt.plot(self.history_beta_em_hidden_goal, marker='o', linestyle='-')
+                plt.xlabel('Iteration')
+                plt.ylabel('value')
+                plt.title('EStimation Beta with gradient')
+                
+                # Add a horizontal reference line 
+                plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+                plt.legend()
+        plt.show()
+        
+    def plot_beta_Estimation_com(self, gradient=True, em=False, hidden_goal_comp=False, groundtruth=0.01):
+        if gradient :
+            plt.plot(self.history_beta_gradient, linestyle='--', label='gradient ascent complete data')
+            plt.plot(self.history_beta_gradient_hidden_goal, linestyle='-o', label='gradient ascent without complete data')
             plt.xlabel('Iteration')
             plt.ylabel('value')
             plt.title('EStimation Beta with gradient')
@@ -1464,17 +1507,17 @@ class BoltzmanEstimator:
             # Add a horizontal reference line 
             plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
             plt.legend()
-            
         elif em:
-            plt.plot(self.history_beta_em, marker='o', linestyle='-')
+            plt.plot(self.history_beta_em, marker='-', linestyle='--')
+            plt.plot(self.history_beta_em_hidden_goal, marker='-o', linestyle='-')
             plt.xlabel('Iteration')
             plt.ylabel('value')
-            plt.title('EStimation Beta with EM')
+            plt.title('EStimation Beta with gradient')
             
             # Add a horizontal reference line 
             plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
             plt.legend()
-        plt.show() 
+    
     
     def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2

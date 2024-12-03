@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd 
 from minigrid.core.actions import ActionsReduced, ActionsAgent2, WorldSate, GoalState
 from gymnasium import Env
-from minigrid.core.world_object import Wall
+from minigrid.core.world_object import Wall, Door
 import time
 ALL_POSSIBLE_ACTIONS_1 = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_ACTIONS_2 = (ActionsAgent2.nothing, ActionsAgent2.take_key)
@@ -26,7 +26,7 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 12
+        discretize_num = 18
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
         #print(self.discretize_belief)
 
@@ -39,8 +39,10 @@ class AssistiveAgent:
             pass
         if action == ActionsAgent2.take_key1:
             self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
+            self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1])
         elif action == ActionsAgent2.take_key2:
             self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
+            self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1])
         #if terminated:
         #    print("terminated!")
         #    self.reset(self.seed)
@@ -138,9 +140,9 @@ class AssistiveAgent:
                 world_prime = current_world
         else:
             if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
-                world_prime = (WorldSate.open_door1, current_world[1])
+                world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
             elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
-                world_prime = (current_world[0], WorldSate.open_door2)
+                world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
             elif action == ActionsAgent2.nothing:
                 world_prime = current_world
             else:
@@ -490,8 +492,7 @@ class AssistiveAgent:
                         conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][w][previous_state][a]
             current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
             normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
-        if normalizing_factor > 0:
-            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+         
         return current_dist
     
     def belief_state_iterative_game(self, previous_dist_g, dist_boltzmann, w, s, previous_state, belief,  action_2=None):

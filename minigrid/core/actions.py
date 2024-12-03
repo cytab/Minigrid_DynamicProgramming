@@ -1047,6 +1047,7 @@ def solve(
                 planner = sarsop(problem.agent, pomdpsol_path, discount_factor=0.99,
                             timeout=100, memory=200, precision=0.000001,
                             remove_generated_files=False)
+                            temp-pomdp-multiple-goal_RED_12_12_eta9_belief05_(infreward)
                 '''
             else:
                 policy_path = './temp-pomdp-human.policy'
@@ -1100,6 +1101,14 @@ def solve(
                     options=["-horizon", "100"],
                     remove_generated_files=False,
                     return_policy_graph=False)
+    elif solver_type == 'POMCP':
+        planner = pomdp_py.POMCP(
+            max_depth=max_depth,
+            discount_factor=discount_factor,
+            planning_time=planning_time,
+            exploration_const=exploration_const,
+            rollout_policy=problem.agent.policy_model,
+        ) 
     
     prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
@@ -1121,6 +1130,7 @@ def solve(
             #w = problem.env.state.world
             w = problem.env.state.world
             state_current = problem.env.state.p
+            print(problem.env.state)
             if problem.env.state.goal == GoalState.green_goal:
                 print(problem.agent.cur_belief[problem.env.state])
                 approx_belief = agent2.approx_prob_to_belief(problem.agent.cur_belief[problem.env.state])
@@ -1128,7 +1138,7 @@ def solve(
                 print("Compared Action to baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
             else:
                 print(problem.agent.cur_belief[problem.env.state])
-                approx_belief = agent2.approx_prob_to_belief(1-problem.agent.cur_belief[problem.env.state])
+                approx_belief = agent2.approx_prob_to_belief(problem.agent.cur_belief[problem.env.state])
                 print(approx_belief)
                 print("Compared Action of baseline: %s" % str(computed_policy[approx_belief][w][state_current]))
         real_action = planner.plan(problem.agent)
@@ -1143,10 +1153,6 @@ def solve(
         
         # Receive observation
         _start = time.time()
-        
-        #print(problem.agent.cur_belief)
-        # Updates
-        #print(problem._agent.tree)
         
         
         # Info and render

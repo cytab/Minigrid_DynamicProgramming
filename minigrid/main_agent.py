@@ -77,7 +77,7 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
     current_dist = previous_dist_g
     normalizing_factor = 0
     for i in range(len(ALL_POSSIBLE_GOAL)):
-        conditional_state_world = 0
+        conditional_state_world = 0.000001
         env.set_state(previous_state)
         for a in env.get_possible_move(previous_state):
             transition = env.get_transition_probs(a, cost_value=1)
@@ -455,6 +455,46 @@ class MainAgent:
         #pool.apply(run_conv, (args,))
         
         #print('finish .. check file test_human')
+        count = 0
+        step.append(count)
+        prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
+        belief = prior
+        belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+        belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+        g = GoalState.red_goal
+        while True :
+            plt.ion()
+            previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+            current_world = self.env.get_world_state()
+            
+            print("real goal", g, "Actual state :", previous_State, "Actual world state :", current_world, "belief at this time step", belief)
+            #take agent 2 action in the world
+            approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
+            print("Action taken by agent 2 : %s" % str(policy_agent2[approx_belief][current_world][current_agent_pose]))
+            agent_2.step(policy_agent2[approx_belief][current_world][current_agent_pose])
+            
+            action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
+            terminated = self.step(action)
+            print("Action taken by Human : %s" % str(action))
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+            if terminated or count == 500:
+                g = GoalState.green_goal
+                #break
+            count += 1
+            step.append(count)
+            
+            belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+            
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+            # update agent pose
+            animate(i=1)
+            
+            prior = belief
+        plt.ioff()
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
+        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
+        plt.show()    
         
         '''
         solve(
@@ -645,7 +685,7 @@ class MainAgent:
     def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
         global step
         eta = 1
-        tru_Eta = 0.01
+        tru_Eta = 0.1
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.red_goal
@@ -693,6 +733,7 @@ class MainAgent:
         collect_data = []
         count = 0
         step.append(count)
+        belief = prior
         N = 2000
         
         for n in range(N):
@@ -753,11 +794,12 @@ class MainAgent:
         plt.show()
         '''
         estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
-        estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
-        estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=1)
-        #estimator.maximum_expectation_iteration(datas=collect_data)
+        #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
+        #estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=1)
+        estimator.maximum_expectation_iteration(datas=collect_data)
+        estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
         #estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
-        estimator.plot_beta_Estimation_com(gradient=True, groundtruth=tru_Eta, em=False)
+        estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)
         
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -765,7 +807,7 @@ class MainAgent:
 
         if terminated:
             print("terminated!")
-            self.reset(self.seed)
+            #self.reset(self.seed)
         elif truncated:
             print("truncated!")
             self.reset(self.seed)
@@ -1185,6 +1227,7 @@ class MainAgent:
         return policy                   
     '''      
     #output the distribution over action in all state of agent 1
+
     def boltzmann_policy(self, Q, eta):
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
@@ -1405,7 +1448,7 @@ class BoltzmanEstimator:
             self.optimized_beta = beta
             print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
             
-    def maximum_expectation_iteration(self, datas, epsilon=1e-12):
+    def maximum_expectation_iteration(self, datas, epsilon=1e-12, hidden_goal= False):
         iteration = 0
         self.beta_old = np.inf
         beta = self.initial_beta
@@ -1419,7 +1462,10 @@ class BoltzmanEstimator:
             self.changing_data = datas
             #update beta
             self.beta_old = beta
-            beta = root(self.func_to_optimize, 12e-6).x[0]
+            if not hidden_goal:
+                beta = root(self.func_to_optimize, 12e-6).x[0]
+            else:
+                beta = root(self.func_to_optimize_hidden_goal, 12e-6).x[0]
             self.history_beta_em.append(beta)
             #print(beta)
                 
@@ -1451,6 +1497,29 @@ class BoltzmanEstimator:
             for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
                 tot += action_probs[i] *(q - (numerateur/exp_sum))
             big_tot += tot
+        return big_tot
+    
+    def func_to_optimize_hidden_goal(self, beta):
+        big_tot = 0
+        for data in self.changing_data:
+            for g in ALL_POSSIBLE_GOAL:
+                    
+                belief_t = data[4] if g == ALL_POSSIBLE_GOAL[0] else 1 - data[4]
+                goal = data[3]
+                a_t = data[2]
+                w_t = data[1]
+                x_t = data[0]
+                max_q = max(self.q_function[g][w_t][x_t].values())
+                action_probs = np.array([np.exp(self.beta_old *(self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS])
+                action_probs /= action_probs.sum()  # Normalize to get probabilities
+                q = self.q_function[g][w_t][x_t][a_t]
+                
+                exp_sum = sum(np.exp(beta* (self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                numerateur = sum(self.q_function[g][w_t][x_t][a]* np.exp(beta*(self.q_function[g][w_t][x_t][a]-max_q)) for a in ALL_POSSIBLE_ACTIONS)
+                tot=0
+                for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
+                    tot += action_probs[i] *(q - (numerateur/exp_sum))
+                big_tot += belief_t*tot
         return big_tot
             
     
@@ -1508,15 +1577,16 @@ class BoltzmanEstimator:
             plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
             plt.legend()
         elif em:
-            plt.plot(self.history_beta_em, marker='-', linestyle='--')
-            plt.plot(self.history_beta_em_hidden_goal, marker='-o', linestyle='-')
+            plt.plot(self.history_beta_em, linestyle='--', label='EM complete data')
+            plt.plot(self.history_beta_em_hidden_goal, linestyle=':', label='EM with incomplete data')
             plt.xlabel('Iteration')
             plt.ylabel('value')
-            plt.title('EStimation Beta with gradient')
+            plt.title('EStimation Beta with EM')
             
             # Add a horizontal reference line 
             plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
             plt.legend()
+        plt.show()
     
     
     def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
@@ -1583,8 +1653,8 @@ if __name__ == "__main__":
     env: MiniGridEnv = gym.make(
         args.env_id,
         tile_size=args.tile_size,
-        #render_mode="human",
-        render_mode=None,
+        render_mode="human",
+        #render_mode=None,
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,
@@ -1599,4 +1669,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start_simBeta(agent_2)
+    agent_1.start(agent_2)

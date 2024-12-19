@@ -26,7 +26,7 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 18
+        discretize_num = 2
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
         #print(self.discretize_belief)
 
@@ -39,10 +39,10 @@ class AssistiveAgent:
             pass
         if action == ActionsAgent2.take_key1:
             self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
-            self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1])
+            #self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1])
         elif action == ActionsAgent2.take_key2:
             self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
-            self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1])
+            #self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1])
         #if terminated:
         #    print("terminated!")
         #    self.reset(self.seed)
@@ -140,9 +140,11 @@ class AssistiveAgent:
                 world_prime = current_world
         else:
             if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
-                world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
+                world_prime = (WorldSate.open_door1, current_world[1])
+                #world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
             elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
-                world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
+                world_prime = (current_world[0], WorldSate.open_door2)
+                #world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
             elif action == ActionsAgent2.nothing:
                 world_prime = current_world
             else:
@@ -661,4 +663,52 @@ class AssistiveAgent:
         self.env.reset(seed=seed)
         self.env.render()
     
+
+
+# Vous avez dit :
+# history = {1: [], 5: [], 45: []}
+#         for n_t in N:
+#             for n in range(n_t):
+#                 print("Data collection")
+#                 print(n)
+#                 self.reset(self.seed)
+#                 current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
+#                 agent_2.step(ActionsAgent2.take_key1)
+#                 agent_2.step(ActionsAgent2.take_key2)
+#                 count = 0
+#                 step = []
+#                 step.append(count)
+#                 while True : 
+#                     #plt.ion()
+#                     if n  > n_t/2:
+#                         g = GoalState.green_goal
+#                     previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+#                     current_world = self.env.get_world_state()
+#                     g = GoalState.red_goal
+#                     action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=real_dts))
+#                     collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
+#                     terminated = self.step(action)
+                    
+#                     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+#                     if terminated or count == 500:
+#                         break
+#                     count += 1
+                    
+#                     belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                    
+#                     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+#                     belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+#                     # update agent pose
+#                     #animate(i=1)
+#                     step.append(count)
+#                     prior = belief
+#             #plt.ioff() 
+#             estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
+#             #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
+#             #estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=1)
+#             #estimator.maximum_expectation_iteration(datas=collect_data)
+#             temp = estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
+#             #estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
+#             history[n_t] = temp
+#         estimator.stock_history_hidden_goal(history)
 

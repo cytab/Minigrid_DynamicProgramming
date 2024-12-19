@@ -86,6 +86,8 @@ class EmptyReducedEnv(MiniGridEnv):
     - `MiniGrid-Empty-Reduced-8x8-v0`
     - `MiniGrid-Empty-Reduced-16x16-v0`
     - `MiniGrid-Empty-Reduced-12x12-v0`
+    - `MiniGrid-Empty-Reduced-32x32-v0`
+    
 
 
     """
@@ -222,7 +224,7 @@ class EmptyReducedEnv(MiniGridEnv):
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
         if action == ActionsReduced.stay:
-                r += 0
+            r += 0
         else:
             r += - cost_value
         
@@ -236,66 +238,67 @@ class EmptyReducedEnv(MiniGridEnv):
         if action == ActionsAgent2.nothing:
             r = 0
         elif action == ActionsAgent2.take_key:
-            r = -20
+            r = -10
         elif action == ActionsAgent2.take_key1:
-            r = -20
+            r = -10
         elif action == ActionsAgent2.take_key2:
-            r = -20
+            r = -10
         return r
     
-    # def check_move(self, action, w, cost_value=0):
-    #     # check if legal move first
-    #     i = self.i
-    #     j = self.j
-    #     if isinstance(action, ActionsReduced):
-    #             #print((i,j))
-    #             #print(self.get_possible_move(pose=np.array((i,j))))
-    #             if action in self.get_possible_move(pose=np.array((i,j))):
-    #                 if action == ActionsReduced.forward:
-    #                     j -= 1
-    #                 elif action == ActionsReduced.backward:
-    #                     j += 1
-    #                 elif action == ActionsReduced.right:
-    #                     i += 1
-    #                 elif action == ActionsReduced.left:
-    #                     i -= 1
-    #                 elif action == ActionsReduced.stay:
-    #                     pass # ne rien faire
-    #             # return a reward (if any)
-    #             reward = self.get_reward_1(i, j, action, cost_value=cost_value)
-    #             return ((i, j), reward)
-    #     elif isinstance(action, ActionsAgent2):
-    #         if action == ActionsAgent2.nothing:
-    #             pass
-    #         if not self.multiple_goal:
-    #             if action == ActionsAgent2.take_key and w is WorldSate.closed_door:
-    #                 if self.door:
-    #                     # considered opened, thus it is not considered an obstacle in solving the bellman equation
-    #                     if self.target_door[(self.splitIdx, self.doorIdx)]:
-    #                         self.target_door[(self.splitIdx, self.doorIdx)] = False
-    #                     else:
-    #                         self.target_door[(self.splitIdx, self.doorIdx)] = True
-    #                 else: 
-    #                     pass
-    #             elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
-    #                 pass
-    #         else:
-    #             if action == ActionsAgent2.nothing:
-    #                 pass
-    #             elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.closed_door1:
-    #                 if self.target_door[self.rooms[0].doorPos]:
-    #                     self.target_door[self.rooms[0].doorPos] = False
-    #                 else:
-    #                     self.target_door[self.rooms[0].doorPos] = True
-    #             elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.open_door1:
-    #                 pass
-    #             elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.closed_door2:
-    #                 if self.target_door[self.rooms[1].doorPos]:
-    #                     self.target_door[self.rooms[1].doorPos] = False
-    #                 else:
-    #                     self.target_door[self.rooms[1].doorPos] = True
-    #             elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.open_door2:
-    #                 pass
+    def check_move(self, action, w, cost_value=0):
+        # check if legal move first
+        i = self.i
+        j = self.j
+        if isinstance(action, ActionsReduced):
+                #print((i,j))
+                #print(self.get_possible_move(pose=np.array((i,j))))
+                if action in self.get_possible_move(pose=np.array((i,j))):
+                    if action == ActionsReduced.forward:
+                        j -= 1
+                    elif action == ActionsReduced.backward:
+                        j += 1
+                    elif action == ActionsReduced.right:
+                        i += 1
+                    elif action == ActionsReduced.left:
+                        i -= 1
+                    elif action == ActionsReduced.stay:
+                        pass # ne rien faire
+                # return a reward (if any)
+                reward = self.get_reward_1(i, j, action, cost_value=cost_value)
+                return ((i, j), reward)
+        elif isinstance(action, ActionsAgent2):
+            if action == ActionsAgent2.nothing:
+                pass
+            if not self.multiple_goal:
+                if action == ActionsAgent2.take_key and w is WorldSate.closed_door:
+                    if self.door:
+                        # considered opened, thus it is not considered an obstacle in solving the bellman equation
+                        if self.target_door[(self.splitIdx, self.doorIdx)]:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = False
+                        else:
+                            self.target_door[(self.splitIdx, self.doorIdx)] = True
+                    else: 
+                        pass
+                elif action == ActionsAgent2.take_key and w is WorldSate.open_door:
+                    pass
+            else:
+                if action == ActionsAgent2.nothing:
+                    pass
+                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.closed_door1:
+                    if self.target_door[self.rooms[0].doorPos]:
+                        self.target_door[self.rooms[0].doorPos] = False
+                    else:
+                        self.target_door[self.rooms[0].doorPos] = True
+                elif action == ActionsAgent2.take_key1 and w[0] is WorldSate.open_door1:
+                    pass
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.closed_door2:
+                    if self.target_door[self.rooms[1].doorPos]:
+                        self.target_door[self.rooms[1].doorPos] = False
+                    else:
+                        self.target_door[self.rooms[1].doorPos] = True
+                elif action == ActionsAgent2.take_key2 and w[1] is WorldSate.open_door2:
+                    pass
+                
     # def check_move(self, action, w=None, cost_value=0):
     #     """
     #     Validate and execute the specified action. Returns the updated position and reward.
@@ -354,70 +357,70 @@ class EmptyReducedEnv(MiniGridEnv):
 
     #     # Invalid action type
     #     return (self.i, self.j), 0
-    def check_move(self, action, w=None, cost_value=0):
-        """
-        Validate and execute the specified action. Returns the updated position and reward.
+    # def check_move(self, action, w=None, cost_value=0):
+    #     """
+    #     Validate and execute the specified action. Returns the updated position and reward.
 
-        Parameters:
-            action (ActionsReduced | ActionsAgent2): The action to validate and perform.
-            w: The current world state (used for ActionsAgent2).
-            cost_value (int): The cost associated with taking an action.
+    #     Parameters:
+    #         action (ActionsReduced | ActionsAgent2): The action to validate and perform.
+    #         w: The current world state (used for ActionsAgent2).
+    #         cost_value (int): The cost associated with taking an action.
 
-        Returns:
-            tuple: Updated position (i, j) and associated reward.
-        """
-        def get_new_position(i, j, action):
-            """
-            Determine the new position based on the action.
-            """
-            movement_map = {
-                ActionsReduced.forward: (0, -1),
-                ActionsReduced.backward: (0, 1),
-                ActionsReduced.right: (1, 0),
-                ActionsReduced.left: (-1, 0),
-                ActionsReduced.stay: (0, 0),
-            }
-            di, dj = movement_map.get(action, (0, 0))
-            return i + di, j + dj
+    #     Returns:
+    #         tuple: Updated position (i, j) and associated reward.
+    #     """
+    #     def get_new_position(i, j, action):
+    #         """
+    #         Determine the new position based on the action.
+    #         """
+    #         movement_map = {
+    #             ActionsReduced.forward: (0, -1),
+    #             ActionsReduced.backward: (0, 1),
+    #             ActionsReduced.right: (1, 0),
+    #             ActionsReduced.left: (-1, 0),
+    #             ActionsReduced.stay: (0, 0),
+    #         }
+    #         di, dj = movement_map.get(action, (0, 0))
+    #         return i + di, j + dj
 
-        def toggle_target_door(target_key):
-            """
-            Ensures only one target door can be `False` by setting all others to `True`.
-            """
-            for key in self.target_door:
-                self.target_door[key] = True  # Lock all doors
-                self.target_door[target_key] = False  # Unlock the selected door
+    #     def toggle_target_door(target_key):
+    #         """
+    #         Ensures only one target door can be `False` by setting all others to `True`.
+    #         """
+    #         for key in self.target_door:
+    #             self.target_door[key] = True  # Lock all doors
+    #             self.target_door[target_key] = False  # Unlock the selected door
 
-        # Handle reduced movement actions
-        if isinstance(action, ActionsReduced):
-            possible_moves = self.get_possible_move(pose=(self.i, self.j))
-            if action not in possible_moves:
-                return (self.i, self.j), 0  # Invalid action: No movement or reward
+    #     # Handle reduced movement actions
+    #     if isinstance(action, ActionsReduced):
+    #         possible_moves = self.get_possible_move(pose=(self.i, self.j))
+    #         if action not in possible_moves:
+    #             return (self.i, self.j), 0  # Invalid action: No movement or reward
             
-            new_i, new_j = get_new_position(self.i, self.j, action)
-            reward = self.get_reward_1(new_i, new_j, action, cost_value=cost_value)
-            return (new_i, new_j), reward
+    #         new_i, new_j = get_new_position(self.i, self.j, action)
+    #         reward = self.get_reward_1(new_i, new_j, action, cost_value=cost_value)
+    #         return (new_i, new_j), reward
 
-        # Handle agent-specific actions
-        elif isinstance(action, ActionsAgent2):
-            if action == ActionsAgent2.nothing:
-                return (self.i, self.j), 0  # No action taken
+    #     # Handle agent-specific actions
+    #     elif isinstance(action, ActionsAgent2):
+    #         if action == ActionsAgent2.nothing:
+    #             return (self.i, self.j), 0  # No action taken
 
-            if not self.multiple_goal:
-                if action == ActionsAgent2.take_key and w == WorldSate.closed_door:
-                    toggle_target_door((self.splitIdx, self.doorIdx))
-                return (self.i, self.j), self.get_reward_2(action)
+    #         if not self.multiple_goal:
+    #             if action == ActionsAgent2.take_key and w == WorldSate.closed_door:
+    #                 toggle_target_door((self.splitIdx, self.doorIdx))
+    #             return (self.i, self.j), self.get_reward_2(action)
 
-            else:  # Handle multiple goals
-                room_states = [WorldSate.closed_door1, WorldSate.closed_door2]
-                for idx, state in enumerate(room_states):
-                    door_pos = self.rooms[idx].doorPos
-                    if action == getattr(ActionsAgent2, f"take_key{idx+1}") and w[idx] == state:
-                        toggle_target_door(door_pos)
-                return (self.i, self.j), self.get_reward_2(action)
+    #         else:  # Handle multiple goals
+    #             room_states = [WorldSate.closed_door1, WorldSate.closed_door2]
+    #             for idx, state in enumerate(room_states):
+    #                 door_pos = self.rooms[idx].doorPos
+    #                 if action == getattr(ActionsAgent2, f"take_key{idx+1}") and w[idx] == state:
+    #                     toggle_target_door(door_pos)
+    #             return (self.i, self.j), self.get_reward_2(action)
 
-        # Invalid action type
-        return (self.i, self.j), 0
+    #     # Invalid action type
+    #     return (self.i, self.j), 0
 
                 
     def open_door_manually(self, worldState):
@@ -478,11 +481,11 @@ class EmptyReducedEnv(MiniGridEnv):
                 world_prime = current_world
         else:
             if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
-                #world_prime = (WorldSate.open_door1, current_world[1])
-                world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
+                world_prime = (WorldSate.open_door1, current_world[1])
+                #world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
             elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
-                #world_prime = (current_world[0], WorldSate.open_door2)
-                world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
+                world_prime = (current_world[0], WorldSate.open_door2)
+                #world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
             elif action == ActionsAgent2.nothing:
                 world_prime = current_world
             else:
@@ -612,6 +615,7 @@ class EmptyReducedEnv(MiniGridEnv):
                 )
                 self.target_door[((rWallIdx, j + 4))] = True
                 self.put_obj(Door("yellow", is_locked=True), rWallIdx, j+4)
+                #self.grid.set(self.rooms[n].doorPos[0], self.rooms[n].doorPos[1], None)
                 goalPos = self.rooms[n].rand_pos(self)
                 if n == 1: 
                     goal = Goal()
@@ -626,6 +630,9 @@ class EmptyReducedEnv(MiniGridEnv):
                     elif self.size == 10:
                         self.grid.set(8,1, goal)
                         self.goal_.append(np.array([8,1]))
+                    elif self.size == 32:
+                        self.grid.set(30,1, goal)
+                        self.goal_.append(np.array([30,1]))
                         
                 else:
                     #self.grid.set(*goalPos, Goal())
@@ -638,6 +645,9 @@ class EmptyReducedEnv(MiniGridEnv):
                     elif self.size == 10:
                         self.grid.set(8,8, Goal())
                         self.goal_.append(np.array([8,8]))
+                    elif self.size == 32:
+                        self.grid.set(30,30, Goal())
+                        self.goal_.append(np.array([30,30]))
                 #self.goal_.append(np.array([*goalPos]))
             
             

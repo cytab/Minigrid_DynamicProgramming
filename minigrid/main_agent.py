@@ -135,6 +135,99 @@ class MainAgent:
         #count_sucess = 0 
         #for i in range(N):
         """Start the window display with blocking event loop"""
+        # Data for the histgram
+        '''
+        actions = ['Haut', 'Bas', 'Gauche', 'Droite', 'Attendre']
+        probabilities = [0.2, 0.35, 0.15, 0.1, 0.2]  # Example probabilities
+
+        prob_1_1_open_doors_green = [0.01, 0.4994381549665872, 0.01, 0.4994381549665872, 0.01223412786521707]
+        prob_7_4_open_doors_green = [0.01, 0.9894615931350329, 0.01, 0.01, 0.05384068649515891]
+        prob_4_4_open_doors_green = [0.01, 0.49978007905860766,0.01, 0.49978007905860766, 0.04398418827708831]
+        prob_10_8_open_doors_green = [0.01, 0.9898384891317205, 0.01, 0.01, 0.016149093871353055]
+        prob_7_4_open_doors_green_rat_0_25 = [0.13305095468775188, 0.33171378008335184, 0.13305095468775188, 0.13305095468775188, 0.2691333558533926]
+        prob_7_4_open_doors_green_rat_0_8 = [0.032121371683456974, 0.5975575544788935,0.032121371683456974,0.032121371683456974, 0.30607833047073546]
+
+        prob_1_1_open_doors_red = [0.01, 0.49964592205498537, 0.01, 0.49964592205498537, 0.01223412786521707]
+        prob_7_4_open_doors_red = [0.01, 0.01, 0.01, 0.9896752830127303, 0.03247169872635597]
+        prob_4_4_open_doors_red = [0.01, 0.01, 0.01, 0.9594615931350331, 0.02384068649515893]
+        prob_10_8_open_doors_red = [0.01, 0.4995176038517855, 0.4995176038517855, 0.01, 0.0646732462595567]
+
+        prob_7_4_open_doors_red_rat_0_25 = [0.13132053739951044, 0.13132053739951044, 0.13132053739951044, 0.3366841023778008, 0.26935428542366785]
+        prob_7_4_open_doors_red_rat_0_8 = [0.03002360791635148,0.03002360791635148, 0.03002360791635148,0.6108164836880408, 0.2991126925629049]
+
+        prob_1_1_close_doors_red = [0.012334891422532415, 0.012334891422532415, 0.012334891422532415, 0.012334891422532415, 0.9895066043430986]
+        #prob_7_4_close_doors_red = [0.00012334891422532415, 0.00012334891422532415, 0.00012334891422532415, 0.00012334891422532415, 0.9995066043430986]
+        #prob_4_4_close_doors_red = []
+        #prob_10_8_close_doors_red = []
+        # Create the plot
+        # Define a color palette suitable for research papers
+        colors = ['#4C72B0', '#AAAAA8', '#C44E52', '#8172B2', '#CCB974']
+
+        # Create the plot with different colors for each action
+        # Create the plot with a white background
+        fig, ax = plt.subplots(figsize=(8, 6))  # Figure background
+        fig.patch.set_facecolor('white')  # Set the figure background to white
+        ax.set_facecolor('white')  # Set the axes (grid) background to white
+
+        # Create the bar chart
+        bars = ax.bar(actions, prob_7_4_open_doors_green_rat_0_8, color=colors, edgecolor='black')
+
+        # Add titles and labels
+        ax.set_title("Actions at (7, 4), Green Objective", fontsize=14, weight='bold')
+        ax.set_xlabel("Actions", fontsize=12)
+        ax.set_ylabel("Probability", fontsize=12)
+        ax.set_ylim(0, 1)  # Probabilities range from 0 to 1
+
+        # Add gridlines with white background
+        ax.grid(axis='y', linestyle='--', alpha=0.7, color='gray')  # Gridlines over white
+        # Make the grid edges black
+        for spine in ax.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(1.2)  # Optional: Set the thickness of the edge
+        # Hide parts of the spines to emphasize a white background outside the grid
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        # Add a legend
+        ax.legend(bars, actions, title="Actions", fontsize=10, title_fontsize=11, loc="upper right")
+
+        # Improve the layout for a research paper
+        plt.xticks(fontsize=10)
+        plt.yticks(fontsize=10)
+        plt.tight_layout()
+
+        # Show the plot
+        plt.show()
+        '''
+
+        # N_values = [5, 15, 30]
+        # taill_grille = ['12x12', '16x16', '32x32']
+        # computation_times = [135.73, 414, 855.4]
+        # computation_times_state_humain = [414, 981.11, 8977]
+        # computation_time_sarsop_state_human = [20399, 244483+23703, z+z1] # [20399, 374757]
+
+        # fig, ax = plt.subplots(figsize=(8, 6))
+        # fig.patch.set_facecolor('white')
+        # ax.set_facecolor('white')
+
+        # ax.plot(taill_grille, computation_times_state_humain, marker='o', linestyle='-', color='b')
+        # ax.set_title("Computation time of policy")
+        # ax.set_xlabel("Grid Word size")
+        # ax.set_ylabel("Time (seconds)")
+        # ax.grid(axis='y', linestyle='--', alpha=0.7, color='gray')
+
+        # for spine in ax.spines.values():
+        #     spine.set_edgecolor('black')
+        #     spine.set_linewidth(1.2)
+
+        # ax.spines['top'].set_visible(False)
+        # ax.spines['right'].set_visible(False)
+
+        # # Set exact y-axis ticks
+        # ax.set_yticks(computation_times_state_humain)
+        # ax.set_yticklabels([f'{time:.2f}' for time in computation_times])
+
+        # plt.tight_layout()
+        # plt.show()
         
         self.reset(self.seed)
         #self.env.place_agent(top=(1,5))
@@ -145,7 +238,7 @@ class MainAgent:
             self.env.set_env_to_goal(g)
             print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
             J, Q = self.value_iteration_multiple_goal()
-            dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
+            dist = self.boltzmann_policy_multiple_goal(Q,eta=0.8)
             f = open("dist.txt","w")
         
             # write file
@@ -428,7 +521,6 @@ class MainAgent:
                             self.right_list.addItems(self.current_dict2.keys())
                             self.clear_values()
 
-
                 # Application setup
                 app = QApplication(sys.argv)
                 viewer = DynamicDualDictViewer(converted_dict, converted_policy2, dict1_name='Poliy Agent H niveau 0', dict2_name='PoliCY Agent 2 niveau 0')
@@ -455,46 +547,46 @@ class MainAgent:
         #pool.apply(run_conv, (args,))
         
         #print('finish .. check file test_human')
-        count = 0
-        step.append(count)
-        prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
-        belief = prior
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
-        belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
-        g = GoalState.red_goal
-        while True :
-            plt.ion()
-            previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
-            current_world = self.env.get_world_state()
+        # count = 0
+        # step.append(count)
+        # prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
+        # belief = prior
+        # belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+        # belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+        # g = GoalState.red_goal
+        # while True :
+        #     plt.ion()
+        #     previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+        #     current_world = self.env.get_world_state()
             
-            print("real goal", g, "Actual state :", previous_State, "Actual world state :", current_world, "belief at this time step", belief)
-            #take agent 2 action in the world
-            approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
-            print("Action taken by agent 2 : %s" % str(policy_agent2[approx_belief][current_world][current_agent_pose]))
-            agent_2.step(policy_agent2[approx_belief][current_world][current_agent_pose])
+        #     print("real goal", g, "Actual state :", previous_State, "Actual world state :", current_world, "belief at this time step", belief)
+        #     #take agent 2 action in the world
+        #     approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
+        #     print("Action taken by agent 2 : %s" % str(policy_agent2[approx_belief][current_world][current_agent_pose]))
+        #     agent_2.step(policy_agent2[approx_belief][current_world][current_agent_pose])
             
-            action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
-            terminated = self.step(action)
-            print("Action taken by Human : %s" % str(action))
-            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-            if terminated or count == 500:
-                g = GoalState.green_goal
-                #break
-            count += 1
-            step.append(count)
+        #     action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
+        #     terminated = self.step(action)
+        #     print("Action taken by Human : %s" % str(action))
+        #     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+        #     if terminated or count == 500:
+        #         g = GoalState.green_goal
+        #         #break
+        #     count += 1
+        #     step.append(count)
             
-            belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+        #     belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
             
-            belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
-            belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
-            # update agent pose
-            animate(i=1)
+        #     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+        #     belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+        #     # update agent pose
+        #     animate(i=1)
             
-            prior = belief
-        plt.ioff()
-        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
-        plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
-        plt.show()    
+        #     prior = belief
+        # plt.ioff()
+        # plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
+        # plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
+        # plt.show()    
         
         '''
         solve(
@@ -509,8 +601,8 @@ class MainAgent:
             solver_type='sarsop')
             
         '''
-        print(agent_2.discretize_belief)
-        print(agent_2.approx_prob_to_belief(0.11))
+        # print(agent_2.discretize_belief)
+        # print(agent_2.approx_prob_to_belief(0.11))
         solve(
             robotproblem,
             max_depth=12000,
@@ -681,11 +773,10 @@ class MainAgent:
         print(count_sucess/N)
         """
 
-
     def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
         global step
-        eta = 1
-        tru_Eta = 0.1
+        eta = 0.8
+        tru_Eta = 0.25
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.red_goal
@@ -734,44 +825,90 @@ class MainAgent:
         count = 0
         step.append(count)
         belief = prior
-        N = 2000
-        
-        for n in range(N):
-            print("Data collection")
-            print(n)
-            self.reset(self.seed)
-            current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
-            agent_2.step(ActionsAgent2.take_key1)
-            agent_2.step(ActionsAgent2.take_key2)
-            count = 0
-            step = []
-            step.append(count)
-            while True : 
-                #plt.ion()
-                if n > N/2:
-                    g = GoalState.green_goal
-                previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
-                current_world = self.env.get_world_state()
-                g = GoalState.red_goal
-                action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=real_dts))
-                collect_data.append([current_agent_pose, current_world, action, g, belief[ALL_POSSIBLE_GOAL[0]]])
-                terminated = self.step(action)
-                
-                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-                if terminated or count == 500:
-                    break
-                count += 1
-                
-                belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
-                
-                belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
-                belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
-                # update agent pose
-                #animate(i=1)
-                step.append(count)
-                prior = belief
-            #plt.ioff() 
+        # Initialize the history dictionary
+        history = {100: [], 5: [], 45: []}
+
+        # Number of
+        # Monte Carlo runs
+        num_runs = 50
+
+        # N values to iterate over
+        N_values = [100, 5]
+
+        # Storage for final statistics
+        statistics = {}
+
+        for n_t in N_values:
+            all_estimate_evolutions = []  # Store estimate evolutions for all runs
+            print(f"Running Monte Carlo Simulation for N = {n_t}")
             
+            for run in range(num_runs):
+                collect_data = []  # To collect data for each simulation run        
+                estimate_evolution = []  # Track evolution of estimates for this run
+
+                #belief_State_Tracker = {ALL_POSSIBLE_GOAL[0]: [], ALL_POSSIBLE_GOAL[1]: []}
+                #prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}  # Initialize belief state prior
+                
+                for n in range(n_t):
+                    print(f"  Data collection - Run: {run + 1}, Iteration: {n + 1}")
+                    self.reset(self.seed)
+                    current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                    belief_State_Tracker = {ALL_POSSIBLE_GOAL[0]: [], ALL_POSSIBLE_GOAL[1]: []}
+                    prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}  # Initialize belief state prior
+                    agent_2.step(ActionsAgent2.take_key1)
+                    agent_2.step(ActionsAgent2.take_key2)
+                    step = []
+                    step.append(count)
+                    count = 0
+                    while True:
+                        if n > n_t / 2:
+                            g = GoalState.green_goal
+                        else:
+                            g = GoalState.red_goal
+
+                        previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+                        current_world = self.env.get_world_state()
+                        action = ActionsReduced(self.generate_action(
+                            state=current_agent_pose, worldState=current_world, goal=g, dist=real_dts))
+
+                        collect_data.append([current_agent_pose, current_world, action, g, belief.get(ALL_POSSIBLE_GOAL[0], 0)])
+                        terminated = self.step(action)
+
+                        current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                        if terminated or count == 500:
+                            break
+                        count += 1
+
+                        # Update belief state
+                        belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist,
+                                            w=current_world, s=current_agent_pose, previous_state=previous_State)
+                        belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+                        belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+                        step.append(count)
+                        prior = belief
+
+                # Estimate parameters using the BoltzmanEstimator
+                estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
+                temp_evolution = estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
+                
+                all_estimate_evolutions.append(temp_evolution)  # Store evolution of estimates
+                
+            # Compute statistics at each iteration
+            estimate_evolution_length = len(all_estimate_evolutions[0])  # Assumes all evolutions have the same length
+            mean_estimate = np.zeros(estimate_evolution_length)
+            variance_estimate = np.zeros(estimate_evolution_length)
+            for i in range(estimate_evolution_length):
+                values_at_iteration = [run_evolution[i] for run_evolution in all_estimate_evolutions]
+                mean_estimate[i] = np.mean(values_at_iteration)
+                variance_estimate[i] = np.var(values_at_iteration)
+            
+            # Store the best estimate evolution and variance
+            history[n_t] = mean_estimate
+            statistics[n_t] = variance_estimate
+            
+        estimator.stock_history_hidden_goal(history, statistics)
+            
+        estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)  
          
         '''
         data = np.array([[0.1, 0.5, 0.3], [0.4, 0.2, 0.6], [0.7, 0.8, 0.9]])
@@ -793,13 +930,7 @@ class MainAgent:
 
         plt.show()
         '''
-        estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
-        #estimator.gradient_iteration(datas=collect_data, decreasing_step=1)
-        #estimator.gradient_iteration_hidden_goal(datas=collect_data, decreasing_step=1)
-        estimator.maximum_expectation_iteration(datas=collect_data)
-        estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
-        #estimator.plot_beta_Estimation(gradient=True, groundtruth=tru_Eta, em=False)
-        estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)
+        
         
     def step(self, action: ActionsReduced):
         _ , reward, terminated, truncated, _ = self.env.step(action)
@@ -1354,7 +1485,19 @@ class BoltzmanEstimator:
         self.q_function = q_function
         self.boltzman_policy = boltzman_policy
         self.changing_data = []
+        self.N_history_hidden = {}
+        self.statistics = []
+        self.N = 0
     
+    def reset_histogram(self):
+        self.history_beta_em = []
+        self.history_beta_em_hidden_goal = []
+        
+    def stock_history_hidden_goal(self, history, statistics):
+       # self.N_history_hidden[self.N] = []
+        self.N_history_hidden = history
+        self.statistics = statistics
+        
     def gradient_iteration(self, datas, n_iterations=1e6, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
         gradient = 0
         iteration = 0
@@ -1452,10 +1595,12 @@ class BoltzmanEstimator:
         iteration = 0
         self.beta_old = np.inf
         beta = self.initial_beta
-        self.history_beta_em.append(beta)
+        if not hidden_goal:
+            self.history_beta_em.append(beta)
+        else:
+            self.history_beta_em_hidden_goal.append(beta)
         self.all_data = datas
         erreur = 1
-        self.history_beta_em.append(beta)
         debut = time.time()
         while(erreur >= epsilon):
             #print(beta)
@@ -1464,9 +1609,11 @@ class BoltzmanEstimator:
             self.beta_old = beta
             if not hidden_goal:
                 beta = root(self.func_to_optimize, 12e-6).x[0]
+                self.history_beta_em.append(beta)
             else:
                 beta = root(self.func_to_optimize_hidden_goal, 12e-6).x[0]
-            self.history_beta_em.append(beta)
+                self.history_beta_em_hidden_goal.append(beta)
+            
             #print(beta)
                 
             print(f"Iteration {iteration}: beta = {beta}, beta old = {self.beta_old}")
@@ -1474,9 +1621,9 @@ class BoltzmanEstimator:
             erreur = abs(beta-self.beta_old)
             #print(erreur)
             iteration += 1
-            self.history_beta_em.append(beta)
         duration = time.time() - debut
         print(f"Iteration {iteration}: beta = {beta}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
+        return self.history_beta_em_hidden_goal if hidden_goal else self.history_beta_em
 
     
     def func_to_optimize(self, beta):
@@ -1577,16 +1724,49 @@ class BoltzmanEstimator:
             plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
             plt.legend()
         elif em:
-            plt.plot(self.history_beta_em, linestyle='--', label='EM complete data')
-            plt.plot(self.history_beta_em_hidden_goal, linestyle=':', label='EM with incomplete data')
-            plt.xlabel('Iteration')
-            plt.ylabel('value')
-            plt.title('EStimation Beta with EM')
-            
-            # Add a horizontal reference line 
-            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
+            print(self.N)
+            # Assuming the following are available:
+            # history = {1: [], 5: [], 45: []}  # Dictionary storing all estimates for each N
+            # statistics = {1: {}, 5: {}, 45: {}}  # Dictionary storing mean, variance, and CI
+            # groundtruth = <True value of the parameter being estimated>
+
+            colors = ['blue', 'green', 'orange', 'purple']  # Define distinct colors for each N
+            fig, ax = plt.subplots(figsize=(8, 6))
+            fig.patch.set_facecolor('white')
+            ax.set_facecolor('white')
+            for i, n_t in enumerate(self.N_history_hidden.keys()):
+                if i == 0 :
+                    best_estimate_evolution = self.N_history_hidden[n_t]
+                    variance_evolution = self.statistics[n_t]
+                    
+                    lower_bound = best_estimate_evolution - np.sqrt(variance_evolution)
+                    upper_bound = best_estimate_evolution + np.sqrt(variance_evolution)
+                    
+                    # Plot the best estimate evolution with distinct colors
+                    ax.plot(range(len(best_estimate_evolution)), best_estimate_evolution, 
+                            color=colors[i % len(colors)], linestyle='-', linewidth=2, 
+                            label=f'EM avec objectif inconnu K = {n_t}')
+                    
+                    # Shaded region for variance
+                    ax.fill_between(range(len(best_estimate_evolution)), lower_bound, upper_bound, 
+                                    color=colors[i % len(colors)], alpha=0.2, 
+                                    label=f'Variance K = {n_t}')
+                    
+            for spine in ax.spines.values():
+                spine.set_edgecolor('black')
+                spine.set_linewidth(1.2)
+
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            # Improve layout
+            ax.set_title("Évolution de l'estimation avec EM", fontsize=14, weight='bold')
+            ax.set_xlabel("Itération", fontsize=12)
+            ax.set_ylabel("Valeur de Beta", fontsize=12)
+            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vraie valeur')
+
             plt.legend()
-        plt.show()
+            plt.tight_layout()
+            plt.show()
     
     
     def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
@@ -1619,7 +1799,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-12x12-v0",
+        default="MiniGrid-Empty-Reduced-16x16-v0",
     )
     parser.add_argument(
         "--seed",
@@ -1653,8 +1833,8 @@ if __name__ == "__main__":
     env: MiniGridEnv = gym.make(
         args.env_id,
         tile_size=args.tile_size,
-        render_mode="human",
-        #render_mode=None,
+        #render_mode="human",
+        render_mode=None,
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,
@@ -1669,4 +1849,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start(agent_2)
+    agent_1.start_simBeta(agent_2)

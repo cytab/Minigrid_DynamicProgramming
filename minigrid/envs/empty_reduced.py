@@ -219,7 +219,7 @@ class EmptyReducedEnv(MiniGridEnv):
                         possible_action.append(ActionsReduced.left)
         return possible_action   
     
-    def get_reward_1(self, i, j, action, cost_value=0):
+    def get_reward_1(self, i, j, action, cost_value=1):
         r = 0
 #        elif i == self.goal_pose[1][0] and j == self.goal_pose[1][1]:
  #           r = 100
@@ -229,8 +229,7 @@ class EmptyReducedEnv(MiniGridEnv):
             r += - cost_value
         
         if i == self.goal_pose[0][0] and j == self.goal_pose[0][1]:
-            self.goal_achieved += 1
-            r += 100
+            r += 300
         return r 
 
     def get_reward_2(self, action: ActionsAgent2):
@@ -245,7 +244,7 @@ class EmptyReducedEnv(MiniGridEnv):
             r = -10
         return r
     
-    def check_move(self, action, w, cost_value=0):
+    def check_move(self, action, w, cost_value=1):
         # check if legal move first
         i = self.i
         j = self.j

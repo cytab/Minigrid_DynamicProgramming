@@ -128,6 +128,92 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         '''
+    def run_simulation(self, agent, discrete_num, dist, num_simulations=1000, max_steps=300):
+        count = 0
+        agent.set_discretize_num(discrete_num=discrete_num)
+        print(f'@@@@@@@@@@@@ Robot policy with discrete_num={discrete_num} @@@@@@@@@@@@')
+
+        start = time.time()
+        J2_temp, Q2_temp = agent.value_iteration_baseline(dist)
+        end = time.time() - start
+        print('Duration for value iteration:', end)
+
+        policy_agent2 = agent.deduce_policy_multiple_goal(J2_temp, dist)
+
+        all_rewards_human_robot = []
+
+        for sim in range(num_simulations):
+            print(f"Simulation {sim + 1}/{num_simulations} for discrete_num={discrete_num}")
+            print("------------------------------------------------------------- Start Simulation -------------------------------------------------------------")
+
+            self.reset(self.seed)
+            step.append(count)
+            prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
+            belief = prior
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+            belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+            count = 0
+            human_robot_cumulative_reward = 0
+
+            # Collect rewards
+            collected_reward_vector_human_robot = []
+
+            terminated = False
+            g = GoalState.green_goal
+            self.env.set_env_to_goal(g)
+
+            while not terminated and count < max_steps:
+                previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+                current_world = self.env.get_world_state()
+                print(f"Step {count}")
+                print("-------------------------------------------------------------")
+                print(f"Green goal: {g}, Previous state: {previous_State}, Current world state: {current_world}")
+                print(f"Belief at this time step: {belief}")
+
+                approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
+                action_robot = policy_agent2[approx_belief][current_world][current_agent_pose]
+                reward_robot = agent_2.step(action_robot)
+                print(f"Action taken by Agent 2: {action_robot}, Robot reward: {reward_robot}")
+
+                action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g, dist=dist))
+                terminated, reward_human = self.step(action_human)
+                print(f"Action taken by Human: {action_human}, Human reward: {reward_human}")
+
+                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                human_robot_cumulative_reward += reward_robot + reward_human
+
+                print(f"Current Agent Pose: {current_agent_pose}")
+                print(f"Cumulative Rewards (Human + Robot): {human_robot_cumulative_reward}")
+                print("-------------------------------------------------------------")
+
+                count += 1
+                belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                prior = belief
+
+                # Collect rewards
+                collected_reward_vector_human_robot.append(human_robot_cumulative_reward)
+
+            # Pad rewards if simulation ends early
+            while len(collected_reward_vector_human_robot) < max_steps:
+                collected_reward_vector_human_robot.append(human_robot_cumulative_reward)
+
+            all_rewards_human_robot.append(collected_reward_vector_human_robot)
+
+        # Convert rewards to numpy array
+        all_rewards_human_robot = np.array(all_rewards_human_robot, dtype=np.float64)
+
+        # Calculate mean and standard deviation
+        mean_rewards = np.nanmean(all_rewards_human_robot, axis=0)
+        std_rewards = np.nanstd(all_rewards_human_robot, axis=0)
+
+        return mean_rewards, std_rewards
+    
+    def compute_dist(self, agent, eta):
+        print(f"Computing dist for eta={eta}")
+        J, Q = agent.value_iteration_multiple_goal()
+        dist = agent.boltzmann_policy_multiple_goal(Q, eta=eta)
+        return dist
     
     def start(self, agent: AssistiveAgent):
         #N = 1000
@@ -198,7 +284,8 @@ class MainAgent:
         # Show the plot
         plt.show()
         '''
-
+        
+        '''
         # N_values = [5, 15, 30]
         # taill_grille = ['12x12', '16x16', '32x32']
         # computation_times = [135.73, 414, 855.4]
@@ -228,6 +315,7 @@ class MainAgent:
 
         # plt.tight_layout()
         # plt.show()
+        '''
         
         self.reset(self.seed)
         #self.env.place_agent(top=(1,5))
@@ -287,240 +375,6 @@ class MainAgent:
                 #converted_dist_iterative = convert_keys_to_str(dist_iterative)
                 #converted_iterative_q_2 = convert_keys_to_str(Q_iterative_1)
                 #converted_iterative_policy_agent2_niveau_1 = convert_keys_to_str(policy_agent2_niveau_1)
-                class DynamicDualDictViewer(QWidget):
-                    def __init__(self, dict1, dict2, dict1_name="Dictionary 1", dict2_name="Dictionary 2", parent=None):
-                        super().__init__(parent)
-                        self.dict1 = dict1
-                        self.dict2 = dict2
-                        self.current_dict1 = dict1
-                        self.current_dict2 = dict2
-                        self.dict1_name = dict1_name
-                        self.dict2_name = dict2_name
-
-                        self.active_history1 = []  # Active history of navigation for dict1
-                        self.active_history2 = []  # Active history of navigation for dict2
-
-                        self.passive_history1 = [(dict1, 'Root')]  # Passive history for dict1 (stores all visited states)
-                        self.passive_history2 = [(dict2, 'Root')]  # Passive history for dict2
-
-                        self.breadcrumb1 = []  # Track selected keys in dict1
-                        self.breadcrumb2 = []  # Track selected keys in dict2
-
-                        self.initUI()
-
-                    def initUI(self):
-                        self.layout = QVBoxLayout()
-
-                        # Create a row layout for the dictionary comparison area
-                        self.comparison_layout = QGridLayout()
-
-                        # Breadcrumbs for tracking key paths
-                        self.breadcrumb1_label = QLabel('Path: /')
-                        self.breadcrumb2_label = QLabel('Path: /')
-                        self.comparison_layout.addWidget(self.breadcrumb1_label, 0, 0)
-                        self.comparison_layout.addWidget(self.breadcrumb2_label, 0, 1)
-
-                        # Dictionary names displayed at the top
-                        self.dict1_label = QLabel(f'{self.dict1_name}')
-                        self.dict2_label = QLabel(f'{self.dict2_name}')
-                        self.comparison_layout.addWidget(self.dict1_label, 1, 0)
-                        self.comparison_layout.addWidget(self.dict2_label, 1, 1)
-
-                        # Dropdowns for selecting keys from both dictionaries
-                        self.left_list = QListWidget()
-                        self.left_list.addItems(self.current_dict1.keys())
-                        self.left_list.setSelectionMode(QListWidget.MultiSelection)
-                        self.left_list.itemSelectionChanged.connect(self.on_select_left)
-                        self.comparison_layout.addWidget(self.left_list, 2, 0)
-
-                        self.right_list = QListWidget()
-                        self.right_list.addItems(self.current_dict2.keys())
-                        self.right_list.setSelectionMode(QListWidget.MultiSelection)
-                        self.right_list.itemSelectionChanged.connect(self.on_select_right)
-                        self.comparison_layout.addWidget(self.right_list, 2, 1)
-
-                        # Layout for multiple text areas to display values
-                        self.left_values_layout = QVBoxLayout()
-                        self.right_values_layout = QVBoxLayout()
-
-                        self.comparison_layout.addLayout(self.left_values_layout, 3, 0)
-                        self.comparison_layout.addLayout(self.right_values_layout, 3, 1)
-
-                        # Add back buttons for each dictionary
-                        self.left_back_button = QPushButton("Back (Left Dict)")
-                        self.left_back_button.clicked.connect(self.go_back_left)
-                        self.left_back_button.setEnabled(False)
-                        self.comparison_layout.addWidget(self.left_back_button, 4, 0)
-
-                        self.right_back_button = QPushButton("Back (Right Dict)")
-                        self.right_back_button.clicked.connect(self.go_back_right)
-                        self.right_back_button.setEnabled(False)
-                        self.comparison_layout.addWidget(self.right_back_button, 4, 1)
-
-                        # Add passive history navigation combo boxes
-                        self.left_history_combo = QComboBox()
-                        self.left_history_combo.addItems([item[1] for item in self.passive_history1])
-                        self.left_history_combo.currentIndexChanged.connect(self.on_select_passive_history_left)
-                        self.comparison_layout.addWidget(self.left_history_combo, 5, 0)
-
-                        self.right_history_combo = QComboBox()
-                        self.right_history_combo.addItems([item[1] for item in self.passive_history2])
-                        self.right_history_combo.currentIndexChanged.connect(self.on_select_passive_history_right)
-                        self.comparison_layout.addWidget(self.right_history_combo, 5, 1)
-
-                        # Set up the main layout
-                        self.layout.addLayout(self.comparison_layout)
-                        self.setLayout(self.layout)
-                        self.setWindowTitle('Dynamic Dual Dictionary Viewer')
-
-                        # Apply the style to the entire application
-                        self.apply_styles()
-                        self.show()
-
-                    def apply_styles(self):
-                        """Apply custom styles to the widgets for a better visual appearance."""
-                        self.setStyleSheet("""
-                            QLabel {
-                                font-family: Arial;
-                                font-size: 16px;
-                                font-weight: bold;
-                                color: #333333;
-                            }
-                            QListWidget {
-                                background-color: #f0f0f0;
-                                font-family: Arial;
-                                font-size: 14px;
-                                padding: 5px;
-                                border: 1px solid #cccccc;
-                                border-radius: 10px;
-                                margin: 10px 0;
-                            }
-                            QTextEdit {
-                                background-color: #ffffff;
-                                font-family: Courier;
-                                font-size: 14px;
-                                border: 1px solid #cccccc;
-                                border-radius: 10px;
-                                padding: 10px;
-                                margin-bottom: 10px;
-                            }
-                            QPushButton {
-                                background-color: #8B4513;
-                                font-family: Arial;
-                                font-size: 14px;
-                                font-weight: bold;
-                                color: white;
-                                padding: 8px 16px;
-                                border: none;
-                                border-radius: 5px;
-                                margin: 10px 0;
-                            }
-                            QPushButton:hover {
-                                background-color: #A0522D;
-                            }
-                            QWidget {
-                                background-color: #f8f9fa;
-                            }
-                        """)
-
-                    def clear_values(self):
-                        """Clear all the value display areas."""
-                        for i in reversed(range(self.left_values_layout.count())):
-                            self.left_values_layout.itemAt(i).widget().deleteLater()
-                        for i in reversed(range(self.right_values_layout.count())):
-                            self.right_values_layout.itemAt(i).widget().deleteLater()
-
-                    def display_values(self, dictionary, keys, layout, side):
-                        """Display the selected values in the provided layout without clearing previous values."""
-                        self.clear_values()  # Ensure only the current selection is visible
-                        for key in keys:
-                            selected_value = dictionary.get(key)
-                            text_edit = QTextEdit()
-                            text_edit.setReadOnly(True)
-                            if isinstance(selected_value, dict):
-                                text_edit.setText(f"{key}: <Nested Dictionary>")
-                                # Add to active and passive history, and allow going deeper
-                                if side == 'left':
-                                    self.active_history1.append((self.current_dict1, key))
-                                    self.passive_history1.append((self.current_dict1, key))
-                                    self.left_history_combo.addItem(f"{key}")
-                                    self.current_dict1 = selected_value
-                                    self.left_list.clear()
-                                    self.left_list.addItems(self.current_dict1.keys())
-                                    self.left_back_button.setEnabled(True)
-                                else:
-                                    self.active_history2.append((self.current_dict2, key))
-                                    self.passive_history2.append((self.current_dict2, key))
-                                    self.right_history_combo.addItem(f"{key}")
-                                    self.current_dict2 = selected_value
-                                    self.right_list.clear()
-                                    self.right_list.addItems(self.current_dict2.keys())
-                                    self.right_back_button.setEnabled(True)
-                            else:
-                                text_edit.setText(f"{key}: {str(selected_value)}")
-                            layout.addWidget(text_edit)
-
-                    def on_select_left(self):
-                        """Handle the selection of multiple keys in the left dictionary."""
-                        selected_items = self.left_list.selectedItems()
-                        selected_keys = [item.text() for item in selected_items]
-                        self.breadcrumb1 = selected_keys
-                        self.update_breadcrumbs()
-                        self.display_values(self.current_dict1, selected_keys, self.left_values_layout, 'left')
-
-                    def on_select_right(self):
-                        """Handle the selection of multiple keys in the right dictionary."""
-                        selected_items = self.right_list.selectedItems()
-                        selected_keys = [item.text() for item in selected_items]
-                        self.breadcrumb2 = selected_keys
-                        self.update_breadcrumbs()
-                        self.display_values(self.current_dict2, selected_keys, self.right_values_layout, 'right')
-
-                    def update_breadcrumbs(self):
-                        """Update the breadcrumb labels to show the current path in each dictionary."""
-                        self.breadcrumb1_label.setText(f'Path: /{" / ".join(self.breadcrumb1)}')
-                        self.breadcrumb2_label.setText(f'Path: /{" / ".join(self.breadcrumb2)}')
-
-                    def go_back_left(self):
-                        """Go back to the previous dictionary in the left list."""
-                        if self.active_history1:
-                            self.current_dict1, last_selected_key = self.active_history1.pop()
-                            self.left_list.clear()
-                            self.left_list.addItems(self.current_dict1.keys())
-                            self.breadcrumb1.pop()  # Remove the last breadcrumb entry
-                            self.update_breadcrumbs()
-                            self.clear_values()  # Clear previous values when navigating back
-                            if not self.active_history1:
-                                self.left_back_button.setEnabled(False)
-
-                    def go_back_right(self):
-                        """Go back to the previous dictionary in the right list."""
-                        if self.active_history2:
-                            self.current_dict2, last_selected_key = self.active_history2.pop()
-                            self.right_list.clear()
-                            self.right_list.addItems(self.current_dict2.keys())
-                            self.breadcrumb2.pop()  # Remove the last breadcrumb entry
-                            self.update_breadcrumbs()
-                            self.clear_values()  # Clear previous values when navigating back
-                            if not self.active_history2:
-                                self.right_back_button.setEnabled(False)
-
-                    def on_select_passive_history_left(self, index):
-                        """Handle selection from passive history for the left dictionary."""
-                        if index < len(self.passive_history1):
-                            self.current_dict1, _ = self.passive_history1[index]
-                            self.left_list.clear()
-                            self.left_list.addItems(self.current_dict1.keys())
-                            self.clear_values()
-
-                    def on_select_passive_history_right(self, index):
-                        """Handle selection from passive history for the right dictionary."""
-                        if index < len(self.passive_history2):
-                            self.current_dict2, _ = self.passive_history2[index]
-                            self.right_list.clear()
-                            self.right_list.addItems(self.current_dict2.keys())
-                            self.clear_values()
-
                 # Application setup
                 app = QApplication(sys.argv)
                 viewer = DynamicDualDictViewer(converted_dict, converted_policy2, dict1_name='Poliy Agent H niveau 0', dict2_name='PoliCY Agent 2 niveau 0')
@@ -531,58 +385,94 @@ class MainAgent:
             dist = self.boltzmann_policy(Q, eta=5)
         
         epsilon = 1e-5
-        
-        #problem = Hproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), epsilon=epsilon)
-        
-        
+
         robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
-        #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[1], world2=None, pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=0.1, multiple_goal=self.env.multiple_goal)
+
+        count = 0
+        # Parameters for the Monte Carlo simulation
+        NUM_SIMULATIONS = 1000  # Number of simulations to run
+        MAX_STEPS = 300  # Maximum number of steps per simulation
+
+        # Main code to iterate over discrete_num values and plot results
+        etas = [0.01, 0.8, 2]
+        discrete_nums = [5, 15, 30]
+        colors = ["orange", "blue", "green"]
+        steps = np.arange(1, MAX_STEPS + 1)
         
-        
-        #print('....preparing [.pomdp] file')
-        filename = "./test_human.POMDP"
-        discount = 0.99
-        #pool = multiprocessing.Pool(3)
-        #args = (problem.agent, filename, discount_factor=0.99)
-        #pool.apply(run_conv, (args,))
-        
-        #print('finish .. check file test_human')
-        # count = 0
+        for eta in etas:
+            print(f"Running simulations for eta={eta}")
+            dist = self.compute_dist(agent_2, eta)
+
+            plt.figure(figsize=(12, 8))
+
+            for i, discrete_num in enumerate(discrete_nums):
+                mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist)
+                steps = np.arange(1, MAX_STEPS + 1)
+
+                plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
+                plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
+                
+            plt.title(f"Average Human-Robot Reward (eta={eta})")
+            plt.xlabel("Steps")
+            plt.ylabel("Average Reward")
+            plt.legend()
+            plt.grid(True)
+
+            # Save the plot to a file or display it
+            plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
+            plt.show()  # Show the plot
+            
+            
         # step.append(count)
         # prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
         # belief = prior
         # belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
         # belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+        # collected_reward_vector_human = []
+        # collected_reward_vector_robot = []
+        # human_cumulative_reward = 0
+        # robot_cumulative_reward = 0
         # g = GoalState.red_goal
+        # terminated = False
         # while True :
         #     plt.ion()
-        #     previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
-        #     current_world = self.env.get_world_state()
-            
-        #     print("real goal", g, "Actual state :", previous_State, "Actual world state :", current_world, "belief at this time step", belief)
-        #     #take agent 2 action in the world
-        #     approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
-        #     print("Action taken by agent 2 : %s" % str(policy_agent2[approx_belief][current_world][current_agent_pose]))
-        #     agent_2.step(policy_agent2[approx_belief][current_world][current_agent_pose])
-            
-        #     action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
-        #     terminated = self.step(action)
-        #     print("Action taken by Human : %s" % str(action))
-        #     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-        #     if terminated or count == 500:
+        #     if not terminated and count < 300:
+        #         previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+        #         current_world = self.env.get_world_state()
+                
+        #         print("real goal", g, "Actual state :", previous_State, "Actual world state :", current_world, "belief at this time step", belief)
+        #         #take agent 2 action in the world
+        #         approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
+        #         print("Action taken by agent 2 : %s" % str(policy_agent2[approx_belief][current_world][current_agent_pose]))
+        #         reward_robot = agent_2.step(policy_agent2[approx_belief][current_world][current_agent_pose])
+                
+        #         action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g,dist=dist))
+        #         terminated, reward_human = self.step(action)
+        #         print("Action taken by Human : %s" % str(action))
+        #         current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+        #         human_cumulative_reward += reward_human
+        #         robot_cumulative_reward += reward_robot
+        #         count += 1
+        #         step.append(count)
+                
+        #         belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                
+        #         belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
+        #         belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
+        #         # update agent pose
+        #         animate(i=1)
+                
+        #         prior = belief
+        #         collected_reward_vector_robot.append(robot_cumulative_reward)
+        #         collected_reward_vector_human.append(human_cumulative_reward)
+                
+        #     elif terminated and count < 300:
         #         g = GoalState.green_goal
-        #         #break
-        #     count += 1
-        #     step.append(count)
+        #         collected_reward_vector_robot.append(reward_robot)
+        #         collected_reward_vector_human.append(reward_human)
             
-        #     belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist, w=current_world, s=current_agent_pose, previous_state=previous_State)
-            
-        #     belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
-        #     belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
-        #     # update agent pose
-        #     animate(i=1)
-            
-        #     prior = belief
+        #     elif count >= 300:
+        #         break
         # plt.ioff()
         # plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
         # plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
@@ -603,6 +493,7 @@ class MainAgent:
         '''
         # print(agent_2.discretize_belief)
         # print(agent_2.approx_prob_to_belief(0.11))
+        '''
         solve(
             robotproblem,
             max_depth=12000,
@@ -618,90 +509,8 @@ class MainAgent:
             dist=dist,
             computed_policy=policy_agent2,
             agent2=agent_2)
-        '''
-        #initial_time = time.time()
-        # lorsqu'il n'y a pas l'operateur max on a :
-            # une boucle de calcul complet dure maximum 0.41 s 0.12s (home pc)
-            # nombre iteraation 1439
-        # lorsqu'il y a  l'operateur max on a :
-            # une boucle de calcul complet dure maximum 0.42 s 0.132 (home pc)
-            # nombre iteration 1444
-        #J, Q = self.value_iteration_multiple_goal()
-        #value_iteration_elapsed_time = initial_time - time.time()
-        #print('Elpased time for value iteration with multiple goal:')
-        #print(value_iteration_elapsed_time)
-        ###   --- T = 246s = 4 min
-        #file = open("J.pkl", "wb")
-        #pickle.dump(J, file)
-        #file.close()
-        #file = open("Q.pkl", "wb")
-        #pickle.dump(Q, file)
-        #file.close()
-        #file = open("dictionary_data.pkl", "rb")
-        #output = pickle.load(file)
-        #print(output)
-        #file.close()
-        #policy = self.deduce_policy(J)
-        
-        #J, Q = self.value_iteration()
-        #pprint.PrettyPrinter(width=20).pprint(Q)
-        
-        
-        # Determine initial policy
-        #dist = self.boltzmann_policy_multiple_goal(Q,eta=9)
-        ###   --- T = 
-        #pprint.PrettyPrinter(width=20).pprint(dist)
-        #print("-------------------------")
-        #discretize = (25, 30)
-        #Q2 = {number: {} for number in discretize}
-        #for num in discretize:
-        #    agent_2.set_discretize_num(num)
-        #    J2_temp, Q2_temp = agent_2.value_iteration_baseline(dist)
-        #    #Q2[num] = Q2_temp
-        
-        #    f = open("Q2.txt","w")
-        
-            # write file
-        #    f.write( str(Q2_temp) )
-            #print('Finish ................ :')
-            #print(num)
-            #print('You can save now')
-        
-        # close file
-        #f.close()
-        
-        
-        #J_test = agent_2.extract_J(text_File='Q2.txt', discretize_test=discretize)
-        #values = [J[index][0.0][ALL_POSSIBLE_WOLRD[3]][(1,1)] for index in discretize]
-        #values = []
-        #for index in discretize:
-        #    values.append(J_test[index][0.0][ALL_POSSIBLE_WOLRD[3]][(1,1)])
-            
-        #plt.figure()
-        #plt.plot(discretize, values, label="value function")
-        #plt.show()
-        #pprint.PrettyPrinter(width=20).pprint(Q2)
-            # deduce the actual optimal policy
-        #policy_agent2 = agent_2.deduce_policy_multiple_goal(J2, dist)
-        #f = open("policy2.txt","w")
-        
-        # write file
-        #f.write( str(policy_agent2) )
-        
-        # close file
-        #f.close()
-        #pprint.PrettyPrinter(width=20).pprint(policy_agent2)
-        #previous_State = None
-        #prior = {ALL_POSSIBLE_GOAL[0]: 0.5, ALL_POSSIBLE_GOAL[1]: 0.5}
-        #belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(prior[ALL_POSSIBLE_GOAL[0]])
-        #belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(prior[ALL_POSSIBLE_GOAL[1]])
-        #count = 0
-        #step.append(count)
-        #ani = FuncAnimation(plt.gcf(), animate, interval=60)
-        #ani.save('growingCoil.mp4', writer = 'ffmpeg', fps = 30)
-        #self.env.grid.set(self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1], None)
-        #self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
-        ''' 
+            '''
+
         '''
         while True:
             plt.ion()
@@ -731,47 +540,6 @@ class MainAgent:
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
         plt.show()
         '''
-        """while True:
-            # get world state
-            current_world = self.env.get_world_state()
-            #print("State of current world: ")
-            #print(current_world)
-            
-            #current agent goal 
-            g = GoalState.green_goal
-            #resolve dynamic programming of agent 2
-            J2, Q2 = agent_2.value_iteration(dist)
-            #pprint.PrettyPrinter(width=20).pprint(Q2)
-            # deduce the actual optimal policy
-            policy_agent2 = agent_2.deduce_policy(J2, dist)
-            
-            #take agent 2 action in the world
-            #print("Action taken by agent 2 : ")
-            #print(policy_agent2[current_world][current_agent_pose][g])
-            agent_2.step(policy_agent2[current_world][current_agent_pose][g])
-        
-            #recalculate Q function of agent 1
-            J, Q = self.value_iteration()
-        
-            #new distribution of action of agent 1 
-            dist = self.boltzmann_policy(Q=Q, eta=3)
-            
-            # generate an action from distribution
-            action = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=GoalState.green_goal,dist=dist))
-        
-            # take agent 1 action in the world
-            terminated = self.step(action)
-        
-            # update agent pose
-            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-            if terminated:
-                count_sucess = count_sucess + 1
-                break
-            step = step + 1
-             
-        print("---------------------------------------- Sucess rate -------------------------------------")
-        print(count_sucess/N)
-        """
 
     def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
         global step
@@ -826,14 +594,14 @@ class MainAgent:
         step.append(count)
         belief = prior
         # Initialize the history dictionary
-        history = {100: [], 5: [], 45: []}
-
+        history = {1: [], 5: [], 45: []}
+        time_history = {1:0, 5:0, 45:0}
         # Number of
         # Monte Carlo runs
         num_runs = 50
 
         # N values to iterate over
-        N_values = [100, 5]
+        N_values = [1, 5, 45]
 
         # Storage for final statistics
         statistics = {}
@@ -841,8 +609,9 @@ class MainAgent:
         for n_t in N_values:
             all_estimate_evolutions = []  # Store estimate evolutions for all runs
             print(f"Running Monte Carlo Simulation for N = {n_t}")
-            
+            duratin_Taken = []
             for run in range(num_runs):
+                
                 collect_data = []  # To collect data for each simulation run        
                 estimate_evolution = []  # Track evolution of estimates for this run
 
@@ -890,8 +659,8 @@ class MainAgent:
                 # Estimate parameters using the BoltzmanEstimator
                 estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
                 temp_evolution = estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
-                
-                all_estimate_evolutions.append(temp_evolution)  # Store evolution of estimates
+                duratin_Taken.append(temp_evolution[1])
+                all_estimate_evolutions.append(temp_evolution[0])  # Store evolution of estimates
                 
             # Compute statistics at each iteration
             estimate_evolution_length = len(all_estimate_evolutions[0])  # Assumes all evolutions have the same length
@@ -905,11 +674,12 @@ class MainAgent:
             # Store the best estimate evolution and variance
             history[n_t] = mean_estimate
             statistics[n_t] = variance_estimate
+            time_history[n_t] = np.mean(duratin_Taken)
             
-        estimator.stock_history_hidden_goal(history, statistics)
+        estimator.stock_history_hidden_goal(history, statistics, time_history)
             
-        estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)  
-         
+        #estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)  
+        estimator.plot_time() 
         '''
         data = np.array([[0.1, 0.5, 0.3], [0.4, 0.2, 0.6], [0.7, 0.8, 0.9]])
         row_labels = ['State 1', 'State 2', 'State 3']
@@ -933,9 +703,12 @@ class MainAgent:
         
         
     def step(self, action: ActionsReduced):
-        _ , reward, terminated, truncated, _ = self.env.step(action)
+        terminated , reward, _, truncated, _ = self.env.step(action)
         print(f"step={self.env.step_count}, reward={reward:.2f}")
-
+        #self.env.set_state(self.env.agent_pos)
+        #pose, reward = self.env.check_move(action, self.env.get_world_state())
+        reward = self.env.get_reward_1(self.env.agent_pos[0], self.env.agent_pos[1], action)
+        terminated = True if (self.env.agent_pos[0],  self.env.agent_pos[1]) == (self.env.goal_pose[0][0], self.env.goal_pose[0][1]) else False
         if terminated:
             print("terminated!")
             #self.reset(self.seed)
@@ -944,7 +717,7 @@ class MainAgent:
             self.reset(self.seed)
         else:
             self.env.render()
-        return terminated
+        return terminated, reward 
 
     def reset(self, seed=None):
         self.env.reset(seed=seed)
@@ -1486,6 +1259,7 @@ class BoltzmanEstimator:
         self.boltzman_policy = boltzman_policy
         self.changing_data = []
         self.N_history_hidden = {}
+        self.N_time_computation = {}
         self.statistics = []
         self.N = 0
     
@@ -1493,10 +1267,11 @@ class BoltzmanEstimator:
         self.history_beta_em = []
         self.history_beta_em_hidden_goal = []
         
-    def stock_history_hidden_goal(self, history, statistics):
+    def stock_history_hidden_goal(self, history, statistics, time_taken=[]):
        # self.N_history_hidden[self.N] = []
         self.N_history_hidden = history
         self.statistics = statistics
+        self.N_time_computation = time_taken
         
     def gradient_iteration(self, datas, n_iterations=1e6, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
         gradient = 0
@@ -1623,7 +1398,7 @@ class BoltzmanEstimator:
             iteration += 1
         duration = time.time() - debut
         print(f"Iteration {iteration}: beta = {beta}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
-        return self.history_beta_em_hidden_goal if hidden_goal else self.history_beta_em
+        return (self.history_beta_em_hidden_goal, duration) if hidden_goal else (self.history_beta_em, duration)
 
     
     def func_to_optimize(self, beta):
@@ -1735,7 +1510,6 @@ class BoltzmanEstimator:
             fig.patch.set_facecolor('white')
             ax.set_facecolor('white')
             for i, n_t in enumerate(self.N_history_hidden.keys()):
-                if i == 0 :
                     best_estimate_evolution = self.N_history_hidden[n_t]
                     variance_evolution = self.statistics[n_t]
                     
@@ -1768,6 +1542,55 @@ class BoltzmanEstimator:
             plt.tight_layout()
             plt.show()
     
+    def plot_time(self):
+        # Define colors dynamically if K values grow
+        colors = ['blue', 'green', 'orange', 'purple', 'red', 'cyan', 'magenta']
+        K = ["1", "5", "45"]
+        computation_times = list(self.N_time_computation.values())
+
+        fig, ax = plt.subplots(figsize=(8, 6))  # Figure background
+        fig.patch.set_facecolor('white')  # Set the figure background to white
+        ax.set_facecolor('white')  # Set the axes (grid) background to white
+
+        # Create the bar chart
+        bars = ax.bar(K, computation_times, color=colors[:len(K)], edgecolor='black')
+
+        # Add labels to each bar
+        for bar, time in zip(bars, computation_times):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, height + 0.1, f'{time:.2f} s',
+                    ha='center', va='bottom', fontsize=10, weight='bold')
+
+        # Add titles and labels
+        ax.set_title("Temps de calcul", fontsize=14, weight='bold')
+        ax.set_xlabel("K", fontsize=12)
+        ax.set_ylabel("Temps (s)", fontsize=12)
+
+        # Set y-ticks to match computation times
+        ax.set_yticks(computation_times)
+        ax.set_yticklabels([f'{time:.2f}' for time in computation_times], fontsize=10)
+
+        # Add gridlines with white background
+        ax.grid(axis='y', linestyle='--', alpha=0.7, color='gray')
+
+        # Make the grid edges black
+        for spine in ax.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(1.2)
+
+        # Hide unnecessary spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        # Add legend
+        ax.legend(bars, K, title="Valeur de K", fontsize=10, title_fontsize=11, loc="upper right")
+
+        # Improve the layout for a research paper
+        plt.xticks(fontsize=10)
+        plt.tight_layout()
+
+        # Show the plot
+        plt.show()
     
     def belief_state(self, env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
         # be carful of dynamic of w that needs the action of agent 2
@@ -1789,7 +1612,241 @@ class BoltzmanEstimator:
             current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
         return current_dist
   
-    
+  
+class DynamicDualDictViewer(QWidget):
+    def __init__(self, dict1, dict2, dict1_name="Dictionary 1", dict2_name="Dictionary 2", parent=None):
+        super().__init__(parent)
+        self.dict1 = dict1
+        self.dict2 = dict2
+        self.current_dict1 = dict1
+        self.current_dict2 = dict2
+        self.dict1_name = dict1_name
+        self.dict2_name = dict2_name
+
+        self.active_history1 = []  # Active history of navigation for dict1
+        self.active_history2 = []  # Active history of navigation for dict2
+
+        self.passive_history1 = [(dict1, 'Root')]  # Passive history for dict1 (stores all visited states)
+        self.passive_history2 = [(dict2, 'Root')]  # Passive history for dict2
+
+        self.breadcrumb1 = []  # Track selected keys in dict1
+        self.breadcrumb2 = []  # Track selected keys in dict2
+
+        self.initUI()
+
+    def initUI(self):
+        self.layout = QVBoxLayout()
+
+        # Create a row layout for the dictionary comparison area
+        self.comparison_layout = QGridLayout()
+
+        # Breadcrumbs for tracking key paths
+        self.breadcrumb1_label = QLabel('Path: /')
+        self.breadcrumb2_label = QLabel('Path: /')
+        self.comparison_layout.addWidget(self.breadcrumb1_label, 0, 0)
+        self.comparison_layout.addWidget(self.breadcrumb2_label, 0, 1)
+
+        # Dictionary names displayed at the top
+        self.dict1_label = QLabel(f'{self.dict1_name}')
+        self.dict2_label = QLabel(f'{self.dict2_name}')
+        self.comparison_layout.addWidget(self.dict1_label, 1, 0)
+        self.comparison_layout.addWidget(self.dict2_label, 1, 1)
+
+        # Dropdowns for selecting keys from both dictionaries
+        self.left_list = QListWidget()
+        self.left_list.addItems(self.current_dict1.keys())
+        self.left_list.setSelectionMode(QListWidget.MultiSelection)
+        self.left_list.itemSelectionChanged.connect(self.on_select_left)
+        self.comparison_layout.addWidget(self.left_list, 2, 0)
+
+        self.right_list = QListWidget()
+        self.right_list.addItems(self.current_dict2.keys())
+        self.right_list.setSelectionMode(QListWidget.MultiSelection)
+        self.right_list.itemSelectionChanged.connect(self.on_select_right)
+        self.comparison_layout.addWidget(self.right_list, 2, 1)
+
+        # Layout for multiple text areas to display values
+        self.left_values_layout = QVBoxLayout()
+        self.right_values_layout = QVBoxLayout()
+
+        self.comparison_layout.addLayout(self.left_values_layout, 3, 0)
+        self.comparison_layout.addLayout(self.right_values_layout, 3, 1)
+
+        # Add back buttons for each dictionary
+        self.left_back_button = QPushButton("Back (Left Dict)")
+        self.left_back_button.clicked.connect(self.go_back_left)
+        self.left_back_button.setEnabled(False)
+        self.comparison_layout.addWidget(self.left_back_button, 4, 0)
+
+        self.right_back_button = QPushButton("Back (Right Dict)")
+        self.right_back_button.clicked.connect(self.go_back_right)
+        self.right_back_button.setEnabled(False)
+        self.comparison_layout.addWidget(self.right_back_button, 4, 1)
+
+        # Add passive history navigation combo boxes
+        self.left_history_combo = QComboBox()
+        self.left_history_combo.addItems([item[1] for item in self.passive_history1])
+        self.left_history_combo.currentIndexChanged.connect(self.on_select_passive_history_left)
+        self.comparison_layout.addWidget(self.left_history_combo, 5, 0)
+
+        self.right_history_combo = QComboBox()
+        self.right_history_combo.addItems([item[1] for item in self.passive_history2])
+        self.right_history_combo.currentIndexChanged.connect(self.on_select_passive_history_right)
+        self.comparison_layout.addWidget(self.right_history_combo, 5, 1)
+
+        # Set up the main layout
+        self.layout.addLayout(self.comparison_layout)
+        self.setLayout(self.layout)
+        self.setWindowTitle('Dynamic Dual Dictionary Viewer')
+
+        # Apply the style to the entire application
+        self.apply_styles()
+        self.show()
+
+    def apply_styles(self):
+        """Apply custom styles to the widgets for a better visual appearance."""
+        self.setStyleSheet("""
+            QLabel {
+                font-family: Arial;
+                font-size: 16px;
+                font-weight: bold;
+                color: #333333;
+            }
+            QListWidget {
+                background-color: #f0f0f0;
+                font-family: Arial;
+                font-size: 14px;
+                padding: 5px;
+                border: 1px solid #cccccc;
+                border-radius: 10px;
+                margin: 10px 0;
+            }
+            QTextEdit {
+                background-color: #ffffff;
+                font-family: Courier;
+                font-size: 14px;
+                border: 1px solid #cccccc;
+                border-radius: 10px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            QPushButton {
+                background-color: #8B4513;
+                font-family: Arial;
+                font-size: 14px;
+                font-weight: bold;
+                color: white;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            QPushButton:hover {
+                background-color: #A0522D;
+            }
+            QWidget {
+                background-color: #f8f9fa;
+            }
+        """)
+
+    def clear_values(self):
+        """Clear all the value display areas."""
+        for i in reversed(range(self.left_values_layout.count())):
+            self.left_values_layout.itemAt(i).widget().deleteLater()
+        for i in reversed(range(self.right_values_layout.count())):
+            self.right_values_layout.itemAt(i).widget().deleteLater()
+
+    def display_values(self, dictionary, keys, layout, side):
+        """Display the selected values in the provided layout without clearing previous values."""
+        self.clear_values()  # Ensure only the current selection is visible
+        for key in keys:
+            selected_value = dictionary.get(key)
+            text_edit = QTextEdit()
+            text_edit.setReadOnly(True)
+            if isinstance(selected_value, dict):
+                text_edit.setText(f"{key}: <Nested Dictionary>")
+                # Add to active and passive history, and allow going deeper
+                if side == 'left':
+                    self.active_history1.append((self.current_dict1, key))
+                    self.passive_history1.append((self.current_dict1, key))
+                    self.left_history_combo.addItem(f"{key}")
+                    self.current_dict1 = selected_value
+                    self.left_list.clear()
+                    self.left_list.addItems(self.current_dict1.keys())
+                    self.left_back_button.setEnabled(True)
+                else:
+                    self.active_history2.append((self.current_dict2, key))
+                    self.passive_history2.append((self.current_dict2, key))
+                    self.right_history_combo.addItem(f"{key}")
+                    self.current_dict2 = selected_value
+                    self.right_list.clear()
+                    self.right_list.addItems(self.current_dict2.keys())
+                    self.right_back_button.setEnabled(True)
+            else:
+                text_edit.setText(f"{key}: {str(selected_value)}")
+            layout.addWidget(text_edit)
+
+    def on_select_left(self):
+        """Handle the selection of multiple keys in the left dictionary."""
+        selected_items = self.left_list.selectedItems()
+        selected_keys = [item.text() for item in selected_items]
+        self.breadcrumb1 = selected_keys
+        self.update_breadcrumbs()
+        self.display_values(self.current_dict1, selected_keys, self.left_values_layout, 'left')
+
+    def on_select_right(self):
+        """Handle the selection of multiple keys in the right dictionary."""
+        selected_items = self.right_list.selectedItems()
+        selected_keys = [item.text() for item in selected_items]
+        self.breadcrumb2 = selected_keys
+        self.update_breadcrumbs()
+        self.display_values(self.current_dict2, selected_keys, self.right_values_layout, 'right')
+
+    def update_breadcrumbs(self):
+        """Update the breadcrumb labels to show the current path in each dictionary."""
+        self.breadcrumb1_label.setText(f'Path: /{" / ".join(self.breadcrumb1)}')
+        self.breadcrumb2_label.setText(f'Path: /{" / ".join(self.breadcrumb2)}')
+
+    def go_back_left(self):
+        """Go back to the previous dictionary in the left list."""
+        if self.active_history1:
+            self.current_dict1, last_selected_key = self.active_history1.pop()
+            self.left_list.clear()
+            self.left_list.addItems(self.current_dict1.keys())
+            self.breadcrumb1.pop()  # Remove the last breadcrumb entry
+            self.update_breadcrumbs()
+            self.clear_values()  # Clear previous values when navigating back
+            if not self.active_history1:
+                self.left_back_button.setEnabled(False)
+
+    def go_back_right(self):
+        """Go back to the previous dictionary in the right list."""
+        if self.active_history2:
+            self.current_dict2, last_selected_key = self.active_history2.pop()
+            self.right_list.clear()
+            self.right_list.addItems(self.current_dict2.keys())
+            self.breadcrumb2.pop()  # Remove the last breadcrumb entry
+            self.update_breadcrumbs()
+            self.clear_values()  # Clear previous values when navigating back
+            if not self.active_history2:
+                self.right_back_button.setEnabled(False)
+
+    def on_select_passive_history_left(self, index):
+        """Handle selection from passive history for the left dictionary."""
+        if index < len(self.passive_history1):
+            self.current_dict1, _ = self.passive_history1[index]
+            self.left_list.clear()
+            self.left_list.addItems(self.current_dict1.keys())
+            self.clear_values()
+
+    def on_select_passive_history_right(self, index):
+        """Handle selection from passive history for the right dictionary."""
+        if index < len(self.passive_history2):
+            self.current_dict2, _ = self.passive_history2[index]
+            self.right_list.clear()
+            self.right_list.addItems(self.current_dict2.keys())
+            self.clear_values()
+
 if __name__ == "__main__":
     import argparse
 
@@ -1799,7 +1856,7 @@ if __name__ == "__main__":
         type=str,
         help="gym environment to load",
         choices=gym.envs.registry.keys(),
-        default="MiniGrid-Empty-Reduced-16x16-v0",
+        default="MiniGrid-Empty-Reduced-12x12-v0",
     )
     parser.add_argument(
         "--seed",
@@ -1849,4 +1906,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start_simBeta(agent_2)
+    agent_1.start(agent_2)

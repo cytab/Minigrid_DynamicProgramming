@@ -26,7 +26,7 @@ class AssistiveAgent:
         self.track_belief = {}
         for i in range(len(ALL_POSSIBLE_GOAL)):
             self.track_belief[ALL_POSSIBLE_GOAL[i]] = []
-        discretize_num = 2
+        discretize_num = 15
         self.discretize_belief = np.linspace(0.0, 1.0, discretize_num)
         #print(self.discretize_belief)
 
@@ -43,6 +43,8 @@ class AssistiveAgent:
         elif action == ActionsAgent2.take_key2:
             self.env.grid.set(self.env.rooms[1].doorPos[0], self.env.rooms[1].doorPos[1], None)
             #self.env.put_obj(Door("yellow", is_locked=True), self.env.rooms[0].doorPos[0], self.env.rooms[0].doorPos[1])
+        
+        reward = self.env.get_reward_2(action)
         #if terminated:
         #    print("terminated!")
         #    self.reset(self.seed)
@@ -51,6 +53,7 @@ class AssistiveAgent:
         #    self.reset(self.seed)
         #else:
         self.env.render()
+        return reward
     
     def set_discretize_num(self, discrete_num):
         self.discretize_belief = np.linspace(0.0, 1.0, discrete_num)

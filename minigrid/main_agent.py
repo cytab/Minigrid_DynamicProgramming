@@ -128,7 +128,7 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         '''
-    def run_simulation(self, agent, discrete_num, dist, num_simulations=1000, max_steps=300):
+    def run_simulation(self, agent, discrete_num, dist, g=GoalState.green_goal,  num_simulations=1000, max_steps=300):
         count = 0
         agent.set_discretize_num(discrete_num=discrete_num)
         print(f'@@@@@@@@@@@@ Robot policy with discrete_num={discrete_num} @@@@@@@@@@@@')
@@ -160,8 +160,6 @@ class MainAgent:
             collected_reward_vector_human_robot = []
 
             terminated = False
-            g = GoalState.green_goal
-            self.env.set_env_to_goal(g)
 
             while not terminated and count < max_steps:
                 previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
@@ -174,11 +172,11 @@ class MainAgent:
                 approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
                 action_robot = policy_agent2[approx_belief][current_world][current_agent_pose]
                 reward_robot = agent_2.step(action_robot)
-                print(f"Action taken by Agent 2: {action_robot}, Robot reward: {reward_robot}")
+                print("Action taken by Agent 2:", action_robot, "Robot reward:", reward_robot)
 
                 action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g, dist=dist))
                 terminated, reward_human = self.step(action_human)
-                print(f"Action taken by Human: {action_human}, Human reward: {reward_human}")
+                print("Action taken by Human:",  action_human, 'Human reward:',  reward_human )
 
                 current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                 human_robot_cumulative_reward += reward_robot + reward_human
@@ -209,10 +207,11 @@ class MainAgent:
 
         return mean_rewards, std_rewards
     
-    def compute_dist(self, agent, eta):
+    def compute_dist(self, eta, g):
         print(f"Computing dist for eta={eta}")
-        J, Q = agent.value_iteration_multiple_goal()
-        dist = agent.boltzmann_policy_multiple_goal(Q, eta=eta)
+        self.env.set_env_to_goal(g)
+        J, Q = self.value_iteration_multiple_goal()
+        dist = self.boltzmann_policy_multiple_goal(Q, eta=eta)
         return dist
     
     def start(self, agent: AssistiveAgent):
@@ -390,24 +389,25 @@ class MainAgent:
 
         count = 0
         # Parameters for the Monte Carlo simulation
-        NUM_SIMULATIONS = 1000  # Number of simulations to run
+        NUM_SIMULATIONS = 100  # Number of simulations to run
         MAX_STEPS = 300  # Maximum number of steps per simulation
 
         # Main code to iterate over discrete_num values and plot results
         etas = [0.01, 0.8, 2]
         discrete_nums = [5, 15, 30]
         colors = ["orange", "blue", "green"]
+        MAX_STEPS_ETA = [3000, 300, 150]
         steps = np.arange(1, MAX_STEPS + 1)
         
         for eta in etas:
             print(f"Running simulations for eta={eta}")
-            dist = self.compute_dist(agent_2, eta)
+            dist = self.compute_dist(eta, g=g)
 
             plt.figure(figsize=(12, 8))
 
             for i, discrete_num in enumerate(discrete_nums):
-                mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist)
-                steps = np.arange(1, MAX_STEPS + 1)
+                mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist, max_steps=MAX_STEPS_ETA[i], g=g)
+                steps = np.arange(1, MAX_STEPS_ETA[1] + 1)
 
                 plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
                 plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)

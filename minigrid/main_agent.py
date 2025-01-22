@@ -4,6 +4,8 @@ from __future__ import annotations
 import pickle, time
 import pomdp_py
 import gymnasium as gym
+import cvxpy as cp
+import torch
 import pygame, copy
 from gymnasium import Env
 from minigrid.core.grid import Grid
@@ -387,40 +389,40 @@ class MainAgent:
 
         robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
 
-        count = 0
-        # Parameters for the Monte Carlo simulation
-        NUM_SIMULATIONS = 100  # Number of simulations to run
-        MAX_STEPS = 300  # Maximum number of steps per simulation
+        # count = 0
+        # # Parameters for the Monte Carlo simulation
+        # NUM_SIMULATIONS = 100  # Number of simulations to run
+        # MAX_STEPS = 300  # Maximum number of steps per simulation
 
-        # Main code to iterate over discrete_num values and plot results
-        etas = [0.01, 0.8, 2]
-        discrete_nums = [5, 15, 30]
-        colors = ["orange", "blue", "green"]
-        MAX_STEPS_ETA = [3000, 300, 150]
-        steps = np.arange(1, MAX_STEPS + 1)
+        # # Main code to iterate over discrete_num values and plot results
+        # etas = [0.01, 0.8, 2]
+        # discrete_nums = [5, 15, 30]
+        # colors = ["orange", "blue", "green"]
+        # MAX_STEPS_ETA = [3000, 300, 150]
+        # steps = np.arange(1, MAX_STEPS + 1)
         
-        for eta in etas:
-            print(f"Running simulations for eta={eta}")
-            dist = self.compute_dist(eta, g=g)
+        # for eta in etas:
+        #     print(f"Running simulations for eta={eta}")
+        #     dist = self.compute_dist(eta, g=g)
 
-            plt.figure(figsize=(12, 8))
+        #     plt.figure(figsize=(12, 8))
 
-            for i, discrete_num in enumerate(discrete_nums):
-                mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist, max_steps=MAX_STEPS_ETA[i], g=g)
-                steps = np.arange(1, MAX_STEPS_ETA[1] + 1)
+        #     for i, discrete_num in enumerate(discrete_nums):
+        #         mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist, max_steps=MAX_STEPS_ETA[i], g=g)
+        #         steps = np.arange(1, MAX_STEPS_ETA[1] + 1)
 
-                plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
-                plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
+        #         plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
+        #         plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
                 
-            plt.title(f"Average Human-Robot Reward (eta={eta})")
-            plt.xlabel("Steps")
-            plt.ylabel("Average Reward")
-            plt.legend()
-            plt.grid(True)
+        #     plt.title(f"Average Human-Robot Reward (eta={eta})")
+        #     plt.xlabel("Steps")
+        #     plt.ylabel("Average Reward")
+        #     plt.legend()
+        #     plt.grid(True)
 
-            # Save the plot to a file or display it
-            plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
-            plt.show()  # Show the plot
+        #     # Save the plot to a file or display it
+        #     plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
+        #     plt.show()  # Show the plot
             
             
         # step.append(count)
@@ -493,7 +495,7 @@ class MainAgent:
         '''
         # print(agent_2.discretize_belief)
         # print(agent_2.approx_prob_to_belief(0.11))
-        '''
+        
         solve(
             robotproblem,
             max_depth=12000,
@@ -509,7 +511,7 @@ class MainAgent:
             dist=dist,
             computed_policy=policy_agent2,
             agent2=agent_2)
-            '''
+        
 
         '''
         while True:
@@ -534,7 +536,7 @@ class MainAgent:
             animate(i=1)
             # update agent pose
             
-            prior = belief
+            prior = b beta = cp.Variable()elief
         plt.ioff()
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[0]], label='Green goal')
         #plt.plot(step, belief_State_Tracker[ALL_POSSIBLE_GOAL[1]], label='Red goal')
@@ -543,8 +545,8 @@ class MainAgent:
 
     def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
         global step
-        eta = 0.8
-        tru_Eta = 0.25
+        eta = 0.1
+        tru_Eta = 0.3
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.red_goal
@@ -605,7 +607,7 @@ class MainAgent:
 
         # Storage for final statistics
         statistics = {}
-
+        
         for n_t in N_values:
             all_estimate_evolutions = []  # Store estimate evolutions for all runs
             print(f"Running Monte Carlo Simulation for N = {n_t}")
@@ -619,6 +621,8 @@ class MainAgent:
                 #prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}  # Initialize belief state prior
                 
                 for n in range(n_t):
+                    agent_2.step(ActionsAgent2.take_key1)
+                    agent_2.step(ActionsAgent2.take_key2)
                     print(f"  Data collection - Run: {run + 1}, Iteration: {n + 1}")
                     self.reset(self.seed)
                     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
@@ -641,10 +645,12 @@ class MainAgent:
                             state=current_agent_pose, worldState=current_world, goal=g, dist=real_dts))
 
                         collect_data.append([current_agent_pose, current_world, action, g, belief.get(ALL_POSSIBLE_GOAL[0], 0)])
-                        terminated = self.step(action)
+                        terminated, r = self.step(action)
 
                         current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                         if terminated or count == 500:
+                            print('!!!!!!!!!!!!!!!!!! terminated !!!!!!!!!!!!!!!!!!!!!!!!')
+                            print(terminated)
                             break
                         count += 1
 
@@ -709,6 +715,7 @@ class MainAgent:
         #pose, reward = self.env.check_move(action, self.env.get_world_state())
         reward = self.env.get_reward_1(self.env.agent_pos[0], self.env.agent_pos[1], action)
         terminated = True if (self.env.agent_pos[0],  self.env.agent_pos[1]) == (self.env.goal_pose[0][0], self.env.goal_pose[0][1]) else False
+        print(terminated)
         if terminated:
             print("terminated!")
             #self.reset(self.seed)
@@ -1369,7 +1376,10 @@ class BoltzmanEstimator:
     def maximum_expectation_iteration(self, datas, epsilon=1e-12, hidden_goal= False):
         iteration = 0
         self.beta_old = np.inf
-        beta = self.initial_beta
+        #beta = cp.Variable()
+        #beta.value = self.initial_beta
+        beta = torch.tensor(self.initial_beta, requires_grad=True)  # Initial value of beta
+        learning_rate = 1e-8
         if not hidden_goal:
             self.history_beta_em.append(beta)
         else:
@@ -1377,23 +1387,52 @@ class BoltzmanEstimator:
         self.all_data = datas
         erreur = 1
         debut = time.time()
+        self.changing_data = datas
+        #max_norm = 1.0 
         while(erreur >= epsilon):
             #print(beta)
-            self.changing_data = datas
+            
             #update beta
-            self.beta_old = beta
+            self.beta_old = beta.item()
             if not hidden_goal:
                 beta = root(self.func_to_optimize, 12e-6).x[0]
                 self.history_beta_em.append(beta)
+
             else:
-                beta = root(self.func_to_optimize_hidden_goal, 12e-6).x[0]
-                self.history_beta_em_hidden_goal.append(beta)
-            
-            #print(beta)
+                # beta = root(self.func_to_optimize_hidden_goal, 12e-6).x[0]
+                # self.history_beta_em_hidden_goal.append(beta)
+                '''
+                # Define the objective
+                objective = cp.Maximize(self.func_to_optimize_hidden_goal_cvx(beta))
+
+                # Define constraints (if any)
+                constraints = [beta >= 0]  # Example: beta must be non-negative
                 
+                # Setup the problem
+                problem = cp.Problem(objective, constraints)
+                # Solve the problem
+                problem.solve()
+
+                # Extract the optimal value
+                optimal_beta = beta.value
+                optimal_value = problem.value
+
+                print("Optimal beta:", optimal_beta)
+                print("Optimal value:", optimal_value)
+                '''
+                objective = self.func_to_optimize_torch(beta)
+                objective.backward()
+                torch.nn.utils.clip_grad_norm_(beta, max_norm=1.0)
+                with torch.no_grad():
+                    beta += learning_rate * beta.grad
+
+                # Clear gradients
+                beta.grad.zero_()
+            #print(beta)
+            print(f"Iteration {iteration+1}, Objective: {objective.item()}, Beta: {beta.item()}")
             print(f"Iteration {iteration}: beta = {beta}, beta old = {self.beta_old}")
             #compute error
-            erreur = abs(beta-self.beta_old)
+            erreur = abs(beta.item()-self.beta_old)
             #print(erreur)
             iteration += 1
         duration = time.time() - debut
@@ -1443,7 +1482,69 @@ class BoltzmanEstimator:
                     tot += action_probs[i] *(q - (numerateur/exp_sum))
                 big_tot += belief_t*tot
         return big_tot
-            
+    
+    def func_to_optimize_hidden_goal_cvx(self, beta):
+        big_tot = 0
+
+        for data in self.changing_data:
+            for g in ALL_POSSIBLE_GOAL:
+                belief_t = data[4] if g == ALL_POSSIBLE_GOAL[0] else 1 - data[4]
+                goal = data[3]
+                a_t = data[2]
+                w_t = data[1]
+                x_t = data[0]
+
+                # Compute Q-values
+                q_values = [self.q_function[g][w_t][x_t][a] for a in ALL_POSSIBLE_ACTIONS]
+                max_q = max(q_values)
+
+                # Exponentials of adjusted Q-values
+                exp_q = cp.hstack([cp.exp(self.beta_old * (q - max_q)) for q in q_values])
+                
+                # Action probabilities
+                action_probs = exp_q / cp.sum(exp_q)
+
+                # Numerator and denominator for current action
+                q = self.q_function[g][w_t][x_t][a_t]
+                exp_q_values = cp.hstack([beta * (q_i - max_q) for q_i in q_values])
+
+                # Contribution to the total
+                tot_terms = []
+                for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
+                    term = action_probs[i] * (1 * q - cp.log_sum_exp(exp_q_values))
+                    tot_terms.append(term)
+                tot = cp.sum(cp.hstack(tot_terms))
+
+                # Add belief-weighted contribution to the total
+                big_tot += belief_t * tot
+
+        return big_tot
+    
+    def func_to_optimize_torch(self, beta):
+        big_tot = 0
+        for data in self.changing_data:
+            for g in ALL_POSSIBLE_GOAL:
+                belief_t = data[4] if g == ALL_POSSIBLE_GOAL[0] else 1 - data[4]
+                a_t = data[2]
+                w_t = data[1]
+                x_t = data[0]
+
+                q_values = [self.q_function[g][w_t][x_t][a] for a in ALL_POSSIBLE_ACTIONS]
+                max_q = max(q_values)
+
+                exp_q = torch.exp(self.beta_old * (torch.tensor(q_values) - max_q))
+                action_probs = exp_q / exp_q.sum()
+
+                q = self.q_function[g][w_t][x_t][a_t]
+                exp_q_values = beta * (torch.tensor(q_values) - max_q)
+
+                tot = torch.sum(
+                    action_probs * (beta * q - torch.logsumexp(exp_q_values, dim=0))
+                )
+
+                big_tot += belief_t * tot
+
+        return big_tot
     
     def plot_beta_Estimation(self, gradient=True, em=False, hidden_goal_comp=False, groundtruth=0.01):
         if gradient is True:
@@ -1906,4 +2007,4 @@ if __name__ == "__main__":
 
     agent_1 = MainAgent(env, seed=args.seed)
     agent_2 = AssistiveAgent(env=env, seed=args.seed)
-    agent_1.start(agent_2)
+    agent_1.start_simBeta(agent_2)

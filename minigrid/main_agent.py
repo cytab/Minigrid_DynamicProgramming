@@ -130,7 +130,7 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         '''
-    def run_simulation(self, agent, discrete_num, dist, g=GoalState.green_goal,  num_simulations=1000, max_steps=300):
+    def run_simulation(self, agent, discrete_num, dist, g=GoalState.green_goal,  num_simulations=2, max_steps=300):
         count = 0
         agent.set_discretize_num(discrete_num=discrete_num)
         print(f'@@@@@@@@@@@@ Robot policy with discrete_num={discrete_num} @@@@@@@@@@@@')
@@ -143,6 +143,7 @@ class MainAgent:
         policy_agent2 = agent.deduce_policy_multiple_goal(J2_temp, dist)
 
         all_rewards_human_robot = []
+        action_counts = {ActionsAgent2.take_key1: [], ActionsAgent2.take_key2: []}
 
         for sim in range(num_simulations):
             print(f"Simulation {sim + 1}/{num_simulations} for discrete_num={discrete_num}")
@@ -150,17 +151,17 @@ class MainAgent:
 
             self.reset(self.seed)
             step.append(count)
-            prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1-PROB_SIM_GREEN_GOAL}
+            prior = {ALL_POSSIBLE_GOAL[0]: PROB_SIM_GREEN_GOAL, ALL_POSSIBLE_GOAL[1]: 1 - PROB_SIM_GREEN_GOAL}
             belief = prior
             belief_State_Tracker[ALL_POSSIBLE_GOAL[0]].append(belief[ALL_POSSIBLE_GOAL[0]])
             belief_State_Tracker[ALL_POSSIBLE_GOAL[1]].append(belief[ALL_POSSIBLE_GOAL[1]])
             current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
             count = 0
             human_robot_cumulative_reward = 0
+            self.env.set_env_to_goal(g)
 
             # Collect rewards
             collected_reward_vector_human_robot = []
-
             terminated = False
 
             while not terminated and count < max_steps:
@@ -176,12 +177,20 @@ class MainAgent:
                 reward_robot = agent_2.step(action_robot)
                 print("Action taken by Agent 2:", action_robot, "Robot reward:", reward_robot)
 
+                # Track occurrences of GoalState.take1 and GoalState.take2
+                if action_robot == ActionsAgent2.take_key1:
+                    action_counts[ActionsAgent2.take_key1].append(count)
+                elif action_robot == ActionsAgent2.take_key2:
+                    action_counts[ActionsAgent2.take_key2].append(count)
+
+                current_world = self.env.get_world_state()
                 action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=g, dist=dist))
                 terminated, reward_human = self.step(action_human)
-                print("Action taken by Human:",  action_human, 'Human reward:',  reward_human )
+                print("Action taken by Human:", action_human, 'Human reward:', reward_human)
 
                 current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                 human_robot_cumulative_reward += reward_robot + reward_human
+                
 
                 print(f"Current Agent Pose: {current_agent_pose}")
                 print(f"Cumulative Rewards (Human + Robot): {human_robot_cumulative_reward}")
@@ -207,7 +216,16 @@ class MainAgent:
         mean_rewards = np.nanmean(all_rewards_human_robot, axis=0)
         std_rewards = np.nanstd(all_rewards_human_robot, axis=0)
 
-        return mean_rewards, std_rewards
+        mean_action_counts = {
+        ActionsAgent2.take_key1: np.mean(action_counts[ActionsAgent2.take_key1]) if action_counts[ActionsAgent2.take_key1] else 0,
+        ActionsAgent2.take_key2: np.mean(action_counts[ActionsAgent2.take_key2]) if action_counts[ActionsAgent2.take_key2] else 0
+        }
+
+        print("Mean Action Counts:")
+        print(f"GoalState.take1 mean count: {mean_action_counts[ActionsAgent2.take_key1]}")
+        print(f"GoalState.take2 mean count: {mean_action_counts[ActionsAgent2.take_key2]}")
+
+        return mean_rewards, std_rewards, mean_action_counts
     
     def compute_dist(self, eta, g):
         print(f"Computing dist for eta={eta}")
@@ -389,40 +407,52 @@ class MainAgent:
 
         robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
 
-        # count = 0
-        # # Parameters for the Monte Carlo simulation
-        # NUM_SIMULATIONS = 100  # Number of simulations to run
-        # MAX_STEPS = 300  # Maximum number of steps per simulation
+        count = 0
+        # Parameters for the Monte Carlo simulation
+        NUM_SIMULATIONS = 50  # Number of simulations to run
+        MAX_STEPS = 300  # Maximum number of steps per simulation
 
-        # # Main code to iterate over discrete_num values and plot results
-        # etas = [0.01, 0.8, 2]
-        # discrete_nums = [5, 15, 30]
-        # colors = ["orange", "blue", "green"]
-        # MAX_STEPS_ETA = [3000, 300, 150]
-        # steps = np.arange(1, MAX_STEPS + 1)
+        # Main code to iterate over discrete_num values and plot results
+        #etas = [0.01, 0.8, 2]
+        etas = [0.75, 0.5, 2]
+        discrete_nums = [5, 15, 30]
+        colors = ["orange", "blue", "green"]
+        MAX_STEPS_ETA = [140, 80, 150]
+        steps = np.arange(1, MAX_STEPS + 1)
         
-        # for eta in etas:
-        #     print(f"Running simulations for eta={eta}")
-        #     dist = self.compute_dist(eta, g=g)
+        for eta in etas:
+            print(f"Running simulations for eta={eta}")
+            dist = self.compute_dist(eta, g=g)
 
-        #     plt.figure(figsize=(12, 8))
+            plt.figure(figsize=(12, 8))
 
-        #     for i, discrete_num in enumerate(discrete_nums):
-        #         mean_rewards, std_rewards = self.run_simulation(agent_2, discrete_num, dist, max_steps=MAX_STEPS_ETA[i], g=g)
-        #         steps = np.arange(1, MAX_STEPS_ETA[1] + 1)
+            for i, discrete_num in enumerate(discrete_nums):
+                mean_rewards, std_rewards, mean_action_counts = self.run_simulation(agent_2, discrete_num, dist, max_steps=MAX_STEPS_ETA[i], g=g, num_simulations=NUM_SIMULATIONS)
+                steps = np.arange(1, MAX_STEPS_ETA[i] + 1)
 
-        #         plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
-        #         plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
+                plt.plot(steps[:60], mean_rewards[:60], label=f"discrete_num={discrete_num}", color=colors[i])
+                plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
                 
-        #     plt.title(f"Average Human-Robot Reward (eta={eta})")
-        #     plt.xlabel("Steps")
-        #     plt.ylabel("Average Reward")
-        #     plt.legend()
-        #     plt.grid(True)
+                # plt.figure(figsize=(10, 6))
+                # plt.bar(mean_action_counts.keys(), mean_action_counts.values(), color=['blue', 'orange'], alpha=0.7)
+                # plt.xlabel("Action Type")
+                # plt.ylabel("Mean Number of Times Action Taken")
+                # plt.title("Histogram of Mean Actions Taken by Agent 2")
+                # plt.xticks(ticks=[0, 1], labels=["ActionsAgent2.take_key1", "ActionsAgent2.take_key2"])
+                # plt.grid(True)
+                # plt.savefig("mean_action_histogram.png")
+                # plt.show()
 
-        #     # Save the plot to a file or display it
-        #     plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
-        #     plt.show()  # Show the plot
+                
+            plt.title(f"Average Human-Robot Reward (eta={eta})")
+            plt.xlabel("Steps")
+            plt.ylabel("Average Reward")
+            plt.legend()
+            plt.grid(True)
+
+            # Save the plot to a file or display it
+            plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
+            plt.show()  # Show the plot
             
             
         # step.append(count)
@@ -545,8 +575,8 @@ class MainAgent:
 
     def start_simBeta(self, agent: AssistiveAgent, initial_eta=9, initialProb=0.5):
         global step
-        eta = 0.1
-        tru_Eta = 0.3
+        eta = 0.5
+        tru_Eta = 0.12
         self.reset(self.seed)
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.red_goal
@@ -600,7 +630,7 @@ class MainAgent:
         time_history = {1:0, 5:0, 45:0}
         # Number of
         # Monte Carlo runs
-        num_runs = 50
+        num_runs = 20
 
         # N values to iterate over
         N_values = [1, 5, 45]
@@ -621,15 +651,15 @@ class MainAgent:
                 #prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}  # Initialize belief state prior
                 
                 for n in range(n_t):
-                    agent_2.step(ActionsAgent2.take_key1)
-                    agent_2.step(ActionsAgent2.take_key2)
+                    #agent_2.step(ActionsAgent2.take_key1)
+                    #agent_2.step(ActionsAgent2.take_key2)
                     print(f"  Data collection - Run: {run + 1}, Iteration: {n + 1}")
                     self.reset(self.seed)
                     current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                     belief_State_Tracker = {ALL_POSSIBLE_GOAL[0]: [], ALL_POSSIBLE_GOAL[1]: []}
                     prior = {ALL_POSSIBLE_GOAL[0]: initialProb, ALL_POSSIBLE_GOAL[1]: 1-initialProb}  # Initialize belief state prior
-                    agent_2.step(ActionsAgent2.take_key1)
-                    agent_2.step(ActionsAgent2.take_key2)
+                    #agent_2.step(ActionsAgent2.take_key1)
+                    #agent_2.step(ActionsAgent2.take_key2)
                     step = []
                     step.append(count)
                     count = 0
@@ -648,7 +678,7 @@ class MainAgent:
                         terminated, r = self.step(action)
 
                         current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
-                        if terminated or count == 500:
+                        if terminated or count == 200:
                             print('!!!!!!!!!!!!!!!!!! terminated !!!!!!!!!!!!!!!!!!!!!!!!')
                             print(terminated)
                             break
@@ -664,7 +694,7 @@ class MainAgent:
 
                 # Estimate parameters using the BoltzmanEstimator
                 estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
-                temp_evolution = estimator.maximum_expectation_iteration(datas=collect_data, hidden_goal=True)
+                temp_evolution = estimator.gradient_iteration_hidden_goal(datas=collect_data)
                 duratin_Taken.append(temp_evolution[1])
                 all_estimate_evolutions.append(temp_evolution[0])  # Store evolution of estimates
                 
@@ -673,9 +703,18 @@ class MainAgent:
             mean_estimate = np.zeros(estimate_evolution_length)
             variance_estimate = np.zeros(estimate_evolution_length)
             for i in range(estimate_evolution_length):
-                values_at_iteration = [run_evolution[i] for run_evolution in all_estimate_evolutions]
-                mean_estimate[i] = np.mean(values_at_iteration)
-                variance_estimate[i] = np.var(values_at_iteration)
+                values_at_iteration = []
+                for run_evolution in all_estimate_evolutions:
+                    if i < len(run_evolution):  # Ensure index is within bounds
+                        values_at_iteration.append(run_evolution[i])
+                    else:
+                        print(f"Skipping index {i} for this run because its length is {len(run_evolution)}")
+                
+                if values_at_iteration:  # Check if we collected any values before computing mean/variance
+                    mean_estimate[i] = np.mean(values_at_iteration)
+                    variance_estimate[i] = np.var(values_at_iteration)
+                else:
+                    print(f"Warning: No values collected for iteration {i}")
             
             # Store the best estimate evolution and variance
             history[n_t] = mean_estimate
@@ -684,7 +723,7 @@ class MainAgent:
             
         estimator.stock_history_hidden_goal(history, statistics, time_history)
             
-        #estimator.plot_beta_Estimation_com(gradient=False, groundtruth=tru_Eta, em=True)  
+        estimator.plot_beta_Estimation_com(gradient=True, groundtruth=tru_Eta, em=False)  
         estimator.plot_time() 
         '''
         data = np.array([[0.1, 0.5, 0.3], [0.4, 0.2, 0.6], [0.7, 0.8, 0.9]])
@@ -1280,7 +1319,7 @@ class BoltzmanEstimator:
         self.statistics = statistics
         self.N_time_computation = time_taken
         
-    def gradient_iteration(self, datas, n_iterations=1e6, learning_rate=1e-6, decreasing_step=0.75, epsilon=1e-12):
+    def gradient_iteration(self, datas, n_iterations=1e6, learning_rate=1e-2, decreasing_step=0.99, epsilon=1e-12):
         gradient = 0
         iteration = 0
         beta_old = 1
@@ -1325,7 +1364,7 @@ class BoltzmanEstimator:
             self.optimized_beta = beta
             print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
 
-    def gradient_iteration_hidden_goal(self, datas, n_iterations=1e6, learning_rate=1e-8, decreasing_step=0.75, epsilon=1e-12):
+    def gradient_iteration_hidden_goal(self, datas, n_iterations=1e6, learning_rate=1e-3, decreasing_step=0.90, epsilon=1e-12):
         gradient = 0
         iteration = 0
         beta_old = 1
@@ -1372,6 +1411,7 @@ class BoltzmanEstimator:
         if convergeance is True:
             self.optimized_beta = beta
             print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
+        return (self.history_beta_gradient_hidden_goal, duration) 
             
     def maximum_expectation_iteration(self, datas, epsilon=1e-12, hidden_goal= False):
         iteration = 0
@@ -1379,7 +1419,7 @@ class BoltzmanEstimator:
         #beta = cp.Variable()
         #beta.value = self.initial_beta
         beta = torch.tensor(self.initial_beta, requires_grad=True)  # Initial value of beta
-        learning_rate = 1e-8
+        learning_rate = 1e-2
         if not hidden_goal:
             self.history_beta_em.append(beta)
         else:
@@ -1406,7 +1446,7 @@ class BoltzmanEstimator:
                 objective = cp.Maximize(self.func_to_optimize_hidden_goal_cvx(beta))
 
                 # Define constraints (if any)
-                constraints = [beta >= 0]  # Example: beta must be non-negative
+                constraints = [beta >= 0, beta <= 10]  # Example: beta must be non-negative
                 
                 # Setup the problem
                 problem = cp.Problem(objective, constraints)
@@ -1419,24 +1459,66 @@ class BoltzmanEstimator:
 
                 print("Optimal beta:", optimal_beta)
                 print("Optimal value:", optimal_value)
+                
                 '''
-                objective = self.func_to_optimize_torch(beta)
-                objective.backward()
-                torch.nn.utils.clip_grad_norm_(beta, max_norm=1.0)
-                with torch.no_grad():
-                    beta += learning_rate * beta.grad
+                
+                for step in range(10000):  # Iterate for a fixed number of steps
+                    big_tot = 0  # Reset the objective
 
-                # Clear gradients
-                beta.grad.zero_()
+                    for data in self.changing_data:
+                        for g in ALL_POSSIBLE_GOAL:
+                            # Extract data components
+                            belief_t = data[4] if g == ALL_POSSIBLE_GOAL[0] else 1 - data[4]
+                            a_t = data[2]
+                            w_t = data[1]
+                            x_t = data[0]
+
+                            # Compute Q-values and max Q-value
+                            q_values = torch.tensor([self.q_function[g][w_t][x_t][a] for a in ALL_POSSIBLE_ACTIONS])
+                            max_q = torch.max(q_values)
+
+                            # Compute softmax probabilities
+                            exp_q = torch.exp(beta * (q_values - max_q))
+                            action_probs = exp_q / torch.sum(exp_q)
+
+                            # Compute the current action's Q-value
+                            q = self.q_function[g][w_t][x_t][a_t]
+
+                            # Log-sum-exp term for numerical stability
+                            exp_q_values = beta * (q_values - max_q)
+                            log_sum_exp = torch.logsumexp(exp_q_values, dim=0)
+
+                            # Compute the contribution to the total
+                            tot = torch.sum(action_probs * (beta * q_values - log_sum_exp))
+                            big_tot += belief_t * tot
+
+                    # Maximize the objective
+                    objective = big_tot
+                    objective.backward()  # Compute gradients
+
+                    # Clip gradient to prevent instability
+                    beta.grad = torch.clamp(beta.grad, -1.0, 1.0)
+
+                    # Update beta using gradient ascent
+                    with torch.no_grad():
+                        beta += learning_rate * beta.grad
+
+                    # Clear gradients before the next step
+                    beta.grad.zero_()
+
+                    # Optionally: Print progress
+                    if step % 10 == 0:
+                        print(f"Step {step}: Objective = {objective.item()}, Beta = {beta.item()}")
+                
             #print(beta)
-            print(f"Iteration {iteration+1}, Objective: {objective.item()}, Beta: {beta.item()}")
+            print(f"Iteration {iteration+1}, Beta: {beta.item()}")
             print(f"Iteration {iteration}: beta = {beta}, beta old = {self.beta_old}")
             #compute error
             erreur = abs(beta.item()-self.beta_old)
             #print(erreur)
             iteration += 1
         duration = time.time() - debut
-        print(f"Iteration {iteration}: beta = {beta}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
+        print(f"Iteration {iteration}: beta = {beta.item()}, erreur = {erreur}, beta old = {self.beta_old}, duration in second = {duration}")
         return (self.history_beta_em_hidden_goal, duration) if hidden_goal else (self.history_beta_em, duration)
 
     
@@ -1505,13 +1587,13 @@ class BoltzmanEstimator:
                 action_probs = exp_q / cp.sum(exp_q)
 
                 # Numerator and denominator for current action
-                q = self.q_function[g][w_t][x_t][a_t]
-                exp_q_values = cp.hstack([beta * (q_i - max_q) for q_i in q_values])
+                q = [self.q_function[g][w_t][x_t][a] for a in ALL_POSSIBLE_ACTIONS]
+                exp_q_values = cp.hstack([ (q_i - max_q) for q_i in q_values])
 
                 # Contribution to the total
                 tot_terms = []
                 for i, a in enumerate(ALL_POSSIBLE_ACTIONS):
-                    term = action_probs[i] * (1 * q - cp.log_sum_exp(exp_q_values))
+                    term = action_probs[i] * ( q[i] - cp.log_sum_exp(beta * exp_q_values))
                     tot_terms.append(term)
                 tot = cp.sum(cp.hstack(tot_terms))
 
@@ -1539,7 +1621,7 @@ class BoltzmanEstimator:
                 exp_q_values = beta * (torch.tensor(q_values) - max_q)
 
                 tot = torch.sum(
-                    action_probs * (beta * q - torch.logsumexp(exp_q_values, dim=0))
+                    action_probs * (beta * q_values - torch.logsumexp(exp_q_values, dim=0))
                 )
 
                 big_tot += belief_t * tot
@@ -1588,60 +1670,71 @@ class BoltzmanEstimator:
                 plt.legend()
         plt.show()
         
-    def plot_beta_Estimation_com(self, gradient=True, em=False, hidden_goal_comp=False, groundtruth=0.01):
-        if gradient :
-            plt.plot(self.history_beta_gradient, linestyle='--', label='gradient ascent complete data')
-            plt.plot(self.history_beta_gradient_hidden_goal, linestyle='-o', label='gradient ascent without complete data')
-            plt.xlabel('Iteration')
-            plt.ylabel('value')
-            plt.title('EStimation Beta with gradient')
-            
-            # Add a horizontal reference line 
-            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vrai valeur')
-            plt.legend()
-        elif em:
-            print(self.N)
-            # Assuming the following are available:
-            # history = {1: [], 5: [], 45: []}  # Dictionary storing all estimates for each N
-            # statistics = {1: {}, 5: {}, 45: {}}  # Dictionary storing mean, variance, and CI
-            # groundtruth = <True value of the parameter being estimated>
+    def plot_beta_Estimation_com(self, gradient=True, em=False, groundtruth=0.01):
+        colors = ['blue', 'green', 'orange', 'purple']  # Define colors for different cases
+        fig, ax = plt.subplots(figsize=(8, 6))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
 
-            colors = ['blue', 'green', 'orange', 'purple']  # Define distinct colors for each N
-            fig, ax = plt.subplots(figsize=(8, 6))
-            fig.patch.set_facecolor('white')
-            ax.set_facecolor('white')
+        if gradient:
+            print("Plotting Gradient Ascent Results...")
+
             for i, n_t in enumerate(self.N_history_hidden.keys()):
                     best_estimate_evolution = self.N_history_hidden[n_t]
-                    variance_evolution = self.statistics[n_t]
-                    
+                    variance_evolution = self.statistics[n_t]  # Ensure statistics are computed
+
                     lower_bound = best_estimate_evolution - np.sqrt(variance_evolution)
                     upper_bound = best_estimate_evolution + np.sqrt(variance_evolution)
-                    
-                    # Plot the best estimate evolution with distinct colors
-                    ax.plot(range(len(best_estimate_evolution)), best_estimate_evolution, 
-                            color=colors[i % len(colors)], linestyle='-', linewidth=2, 
-                            label=f'EM avec objectif inconnu K = {n_t}')
-                    
+
+                    # Plot gradient ascent evolution
+                    ax.plot(range(len(best_estimate_evolution)), best_estimate_evolution,
+                            color=colors[i % len(colors)], linestyle='-', linewidth=2,
+                            label=f'Gradient ascent avec objectif inconnu K = {n_t}')
+
                     # Shaded region for variance
-                    ax.fill_between(range(len(best_estimate_evolution)), lower_bound, upper_bound, 
-                                    color=colors[i % len(colors)], alpha=0.2, 
+                    ax.fill_between(range(len(best_estimate_evolution)), lower_bound, upper_bound,
+                                    color=colors[i % len(colors)], alpha=0.2,
                                     label=f'Variance K = {n_t}')
-                    
-            for spine in ax.spines.values():
-                spine.set_edgecolor('black')
-                spine.set_linewidth(1.2)
+                
 
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            # Improve layout
+            ax.set_title("Évolution de l'estimation avec Gradient Ascent", fontsize=14, weight='bold')
+
+        elif em:
+            print("Plotting EM Results...")
+
+            for i, n_t in enumerate(self.N_history_hidden.keys()):
+                best_estimate_evolution = self.N_history_hidden[n_t]
+                variance_evolution = self.statistics[n_t]
+
+                lower_bound = best_estimate_evolution - np.sqrt(variance_evolution)
+                upper_bound = best_estimate_evolution + np.sqrt(variance_evolution)
+
+                # Plot EM estimation evolution
+                ax.plot(range(len(best_estimate_evolution)), best_estimate_evolution,
+                        color=colors[i % len(colors)], linestyle='-', linewidth=2,
+                        label=f'EM avec objectif inconnu K = {n_t}')
+
+                # Shaded region for variance
+                ax.fill_between(range(len(best_estimate_evolution)), lower_bound, upper_bound,
+                                color=colors[i % len(colors)], alpha=0.2,
+                                label=f'Variance K = {n_t}')
+
             ax.set_title("Évolution de l'estimation avec EM", fontsize=14, weight='bold')
-            ax.set_xlabel("Itération", fontsize=12)
-            ax.set_ylabel("Valeur de Beta", fontsize=12)
-            plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vraie valeur')
 
-            plt.legend()
-            plt.tight_layout()
-            plt.show()
+        # Common styling
+        for spine in ax.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(1.2)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        ax.set_xlabel("Itération", fontsize=12)
+        ax.set_ylabel("Valeur de Beta", fontsize=12)
+        plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vraie valeur')
+
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
     
     def plot_time(self):
         # Define colors dynamically if K values grow
@@ -1991,8 +2084,8 @@ if __name__ == "__main__":
     env: MiniGridEnv = gym.make(
         args.env_id,
         tile_size=args.tile_size,
-        #render_mode="human",
-        render_mode=None,
+        render_mode="human",
+        #render_mode=None,
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,

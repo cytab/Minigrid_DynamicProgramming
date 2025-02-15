@@ -562,6 +562,7 @@ class EmptyReducedEnv(MiniGridEnv):
         # Create an empty grid
         self.grid = Grid(width , height)
         self.num_goal = 2
+        self.goal_ = []
         goal_X_1 = width - 5
         goal_Y_1 = height - 5
         
@@ -633,7 +634,7 @@ class EmptyReducedEnv(MiniGridEnv):
                         self.grid.set(30,1, goal)
                         self.goal_.append(np.array([30,1]))
                         
-                else:
+                elif n == 0:
                     #self.grid.set(*goalPos, Goal())
                     if self.size == 16:
                         self.grid.set(14,14, Goal())

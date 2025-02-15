@@ -61,7 +61,7 @@ class GoalState(IntEnum):
     green_goal = 0
     red_goal = 1
 
-PROB_SIM_GREEN_GOAL = 0.5
+PROB_SIM_GREEN_GOAL = 1
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
 #ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
 #RED-eta9-beliefg1-(-10_999)-

@@ -62,24 +62,27 @@ def convert_keys_to_str(d):
         return d
 
 
+START_POSE = (1, 1)
+DIR_POSE = 2
 
 VIEW_DICTIONNARY = False
 USE_LIBRARY = True
 ALL_POSSIBLE_ACTIONS = (ActionsReduced.right, ActionsReduced.left, ActionsReduced.forward, ActionsReduced.backward, ActionsReduced.stay)
-#ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+# ALL_POSSIBLE_WOLRD = (WorldSate.open_door, WorldSate.closed_door)
+# ALL_POSSIBLE_WOLRD = ( (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 
 ALL_POSSIBLE_WOLRD = ((WorldSate.open_door1,WorldSate.open_door2), (WorldSate.open_door1,WorldSate.closed_door2), (WorldSate.closed_door1, WorldSate.open_door2), (WorldSate.closed_door1, WorldSate.closed_door2))
 ALL_POSSIBLE_GOAL = (GoalState.green_goal,GoalState.red_goal)
-#ALL_POSSIBLE_GOAL = GoalState.green_goal
+# ALL_POSSIBLE_GOAL = GoalState.green_goal
 
 
 def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, action_2=None):
     # be carful of dynamic of w that needs the action of agent 2
     #PROCESS ENVIRONEMENT IF POSSIBLE 
     current_dist = previous_dist_g
-    normalizing_factor = 0
+    normalizing_factor = 0.0
     for i in range(len(ALL_POSSIBLE_GOAL)):
-        conditional_state_world = 0.000001
+        conditional_state_world = 0.000000001
         env.set_state(previous_state)
         for a in env.get_possible_move(previous_state):
             transition = env.get_transition_probs(a, cost_value=1)
@@ -92,7 +95,30 @@ def belief_state(env, previous_dist_g, dist_boltzmann, w, s, previous_state, act
         current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
     return current_dist
 
-belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
+def belief_state_iterative_game(env, previous_dist_g, dist_boltzmann, w, s, previous_state, belief,  action_2=None):
+        # be carful of dynamic of w that needs the action of agent 2
+        #PROCESS ENVIRONEMENT IF POSSIBLE 
+        #print(previous_dist_g)
+        current_dist = previous_dist_g
+        normalizing_factor = 0
+        for i in range(len(ALL_POSSIBLE_GOAL)):
+            #print(i)
+            #print(current_dist)
+            conditional_state_world = 0
+            env.set_state(previous_state)
+            for a in env.get_possible_move(previous_state):
+                transition = env.get_transition_probs(a, cost_value=1)
+                for (_,_,state_prime) in transition:
+                    if state_prime == s:
+                        #print(previous_dist_g[ALL_POSSIBLE_GOAL[0]])
+                        conditional_state_world += dist_boltzmann[ALL_POSSIBLE_GOAL[i]][belief][w][previous_state][a]
+            current_dist[ALL_POSSIBLE_GOAL[i]] = conditional_state_world*previous_dist_g[ALL_POSSIBLE_GOAL[i]]
+            normalizing_factor += current_dist[ALL_POSSIBLE_GOAL[i]]
+        if normalizing_factor > 0:
+            current_dist = {ALL_POSSIBLE_GOAL[i]: current_dist[ALL_POSSIBLE_GOAL[i]]/normalizing_factor for i in range(len(ALL_POSSIBLE_GOAL))}
+        return current_dist
+    
+# belief_State_Tracker = {ALL_POSSIBLE_GOAL[i]: [] for i in range(len(ALL_POSSIBLE_GOAL))}
 step = []
 '''
 plt.style.use('fivethirtyeight')
@@ -130,17 +156,36 @@ class MainAgent:
             for w in ALL_POSSIBLE_WOLRD:
                 self.status[ALL_POSSIBLE_GOAL[i]][w] = False
         '''
-    def run_simulation(self, agent, discrete_num, dist_reel, dist_modele, num_simulations=2, max_steps=300):
+    def run_simulation(self, agent, discrete_num, dist_reel, dist_modele, num_simulations=2, max_steps=300, iterative=False, eta_iterative=0.79, eta_reel=0.8):
         count = 0
         agent.set_discretize_num(discrete_num=discrete_num)
         print(f'@@@@@@@@@@@@ Robot policy with discrete_num={discrete_num} @@@@@@@@@@@@')
-
+        
         start = time.time()
         J2_temp, Q2_temp = agent.value_iteration_baseline(dist_modele)
         end = time.time() - start
         print('Duration for value iteration:', end)
 
         policy_agent2 = agent.deduce_policy_multiple_goal(J2_temp, dist_modele)
+        if iterative:
+            print('@@@@@@@@@@@@@@@@@@ Human policy ADAPTATIVE Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent, p_action=dist_modele)
+            dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent, eta=eta_iterative)
+            
+            J_iterative_1, Q_iterative_1 = agent_2.value_iteration_baseline_iterative_game(dist_iterative)
+            policy_agent2_niveau_1 = agent_2.deduce_policy_iterative_game(J=J_iterative_1, p_action=dist_iterative)
+            
+            J2_temp, Q2_temp = agent.value_iteration_baseline(dist_reel)
+            print('Duration for value iteration:', end)
+
+            policy_agent2_reel = agent.deduce_policy_multiple_goal(J2_temp, dist_reel)
+            J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent, p_action=dist_reel)
+            dist_iterative_reel = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent, eta=eta_reel)
+            
+            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            
 
         all_rewards_human_robot = []
         discounted_gt_rewards, discounted_rewards = [], []
@@ -152,7 +197,7 @@ class MainAgent:
             print(f"Simulation {sim + 1}/{num_simulations} for discrete_num={discrete_num}")
             print("------------------------------------------------------------- Start Simulation -------------------------------------------------------------")
             #random_bits =  random.randint(0, 1)
-            random_bits = 0
+            random_bits = 1
             self.env.goal_pose = list()
             if random_bits == 0:
                 self.env.goal_pose.append(self.env.goal_[0])
@@ -171,7 +216,8 @@ class MainAgent:
             current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
             count = 0
             human_robot_cumulative_reward = 0
-            
+            #agent_2.step(ActionsAgent2.take_key2)
+            #agent_2.step(ActionsAgent2.take_key1)
 
             # Collect rewards
             
@@ -192,17 +238,29 @@ class MainAgent:
                 print(f"Belief at this time step: {belief}")
 
                 approx_belief = agent.approx_prob_to_belief(belief[ALL_POSSIBLE_GOAL[0]])
-                action_robot = policy_agent2[approx_belief][current_world][current_agent_pose]
+                if not iterative:
+                    action_robot = policy_agent2[approx_belief][current_world][current_agent_pose]
+                else:
+                    action_robot = policy_agent2_niveau_1[approx_belief][current_world][current_agent_pose]
                 reward_robot = agent_2.step(action_robot)
                 current_dist = {ALL_POSSIBLE_GOAL[0]: approx_belief, ALL_POSSIBLE_GOAL[1]: 1-approx_belief}
 
-                for action in ALL_POSSIBLE_ACTIONS:
-                    for  i in range(len(ALL_POSSIBLE_GOAL)):
-                        self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
-                        self.env.set_state(previous_State)
-                        r = self.env.check_move(action=action,w=current_world,cost_value=1)
-                        exepected_reward_human_by_robot += dist_modele[ALL_POSSIBLE_GOAL[i]][current_world][previous_State][action]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
-                        #exepected_reward_human_by_robot += agent_2.expected_reward_over_goal(s=previous_State, w=current_world, belief_state=approx_belief, p_action=dist_modele, a=action)
+                if not iterative:
+                    for action in ALL_POSSIBLE_ACTIONS:
+                        for  i in range(len(ALL_POSSIBLE_GOAL)):
+                            self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
+                            self.env.set_state(previous_State)
+                            r = self.env.check_move(action=action,w=current_world,cost_value=1)
+                            exepected_reward_human_by_robot += dist_modele[ALL_POSSIBLE_GOAL[i]][current_world][previous_State][action]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
+                            #exepected_reward_human_by_robot += agent_2.expected_reward_over_goal(s=previous_State, w=current_world, belief_state=approx_belief, p_action=dist_modele, a=action)
+                else:
+                    for action in ALL_POSSIBLE_ACTIONS:
+                        for  i in range(len(ALL_POSSIBLE_GOAL)):
+                            self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
+                            self.env.set_state(previous_State)
+                            r = self.env.check_move(action=action,w=current_world,cost_value=1)
+                            exepected_reward_human_by_robot += dist_iterative[ALL_POSSIBLE_GOAL[i]][approx_belief][current_world][previous_State][action]*r[1]*current_dist[ALL_POSSIBLE_GOAL[i]]
+                            
                 print("Action taken by Agent 2:", action_robot, "Robot reward:", exepected_reward_human_by_robot)
 
                 # Track occurrences of GoalState.take1 and GoalState.take2
@@ -212,11 +270,15 @@ class MainAgent:
                     action_counts[ActionsAgent2.take_key2].append(count)
 
                 current_world = self.env.get_world_state()
-                action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=goal, dist=dist_reel))
+                if not iterative:
+                    action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=goal, dist=dist_reel))
+                else:
+                    action_human = ActionsReduced(self.generate_action_iterative_game(belief=approx_belief, state=current_agent_pose, worldState=current_world, goal=goal, dist=dist_iterative_reel))
+
                 terminated, reward_human = self.step(action_human)
                 if terminated:
                     terminated_count += 1
-                print("Action taken by Human:", action_human, 'Human reward:', reward_human)
+                print("Action taken by Human:", action_human,'with probability:', dist_modele[ALL_POSSIBLE_GOAL[i]][current_world][previous_State][action_human],  ' Human reward:', reward_human)
 
                 current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
                 #human_robot_cumulative_reward += reward_robot + reward_human
@@ -229,7 +291,10 @@ class MainAgent:
                 print("-------------------------------------------------------------")
 
                 count += 1
-                belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist_modele, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                if not iterative:
+                    belief = belief_state(env=self.env, previous_dist_g=prior, dist_boltzmann=dist_modele, w=current_world, s=current_agent_pose, previous_state=previous_State)
+                else:
+                    belief = belief_state_iterative_game(env=env, previous_dist_g=prior, dist_boltzmann=dist_iterative, w=current_world, s=current_agent_pose, previous_state=previous_State, belief=approx_belief)
                 prior = belief
 
                 # Collect rewards
@@ -263,8 +328,135 @@ class MainAgent:
         std_discounted_reward = np.std(discounted_rewards)
         
         # Trier et prendre les deux meilleures récompenses cumulatives
-        best_human_robot_cumulative_rewards = all_rewards_human_robot[30]
+        #best_human_robot_cumulative_rewards = all_rewards_human_robot[30]
+        best_human_robot_cumulative_rewards = all_rewards_human_robot
+        print("Mean Action Counts:")
+        print(f"Mean of expected discounted cumulative reward: {mean_discounted_reward}")
+        print(f"STD of expected discounted cumulative reward: {std_discounted_reward}")
+        # print(f"Mean of GROUND TRUTH discounted cumulative reward: {mean_cumulative_reward}")
+        # print(f"STD of GROUND TRUTH discounted cumulative reward: {std_cumulative_reward}")
+
+        return mean_rewards, std_rewards, mean_action_counts, best_human_robot_cumulative_rewards, mean_discounted_reward, std_discounted_reward, best_rewards, terminated_count
+    
+    def run_simulation_single(self, agent, dist_reel, dist_modele, num_simulations=100, max_steps=300, eta_reel=0.8):
+        count = 0
         
+        start = time.time()
+        J2_temp, Q2_temp = agent.value_iteration(dist_modele)
+        end = time.time() - start
+        print('Duration for value iteration:', end)
+
+        policy_agent2 = agent.deduce_policy(J2_temp, dist_modele)
+            
+        all_rewards_human_robot = []
+        discounted_gt_rewards, discounted_rewards = [], []
+        best_rewards = []  # Stocker la meilleure récompense cumulative de chaque simulation
+        action_counts = {ActionsAgent2.take_key1: [], ActionsAgent2.take_key2: []}
+        collect_data = []
+        terminated_count = 0
+        for sim in range(num_simulations):
+            print(f"Simulation {sim + 1}/{num_simulations}")
+            print("------------------------------------------------------------- Start Simulation -------------------------------------------------------------")
+            #random_bits =  random.randint(0, 1)
+            # random_bits = 1
+            goal = GoalState.green_goal
+                
+            
+            self.reset(self.seed)
+            step.append(count)
+            current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+            count = 0
+            human_robot_cumulative_reward = 0
+            #agent_2.step(ActionsAgent2.take_key2)
+            #agent_2.step(ActionsAgent2.take_key1)
+
+            # Collect rewards
+            
+            collected_reward_vector_human_robot, rewards, gt_rewards = [], [], []
+            terminated = False
+
+            while not terminated and count < max_steps:
+                print(f"Simulation {sim + 1}/{num_simulations}")
+                exepected_reward_human_by_robot = 0 
+                print(goal)
+                # print(self.env.goal_pose)
+                previous_State = (self.env.agent_pos[0], self.env.agent_pos[1])
+                current_world = self.env.get_world_state()
+                print(f"Step {count}")
+                print("-------------------------------------------------------------")
+                print(f"Goal: {goal}, Previous state: {previous_State}, Current world state: {current_world}")
+
+                action_robot = policy_agent2[current_world][current_agent_pose][goal]
+                print(action_robot)
+                reward_robot = agent_2.step(action_robot)
+                for action in ALL_POSSIBLE_ACTIONS:
+                    # self.env.set_env_to_goal(ALL_POSSIBLE_GOAL[i])
+                    self.env.set_state(previous_State)
+                    r = self.env.check_move(action=action,w=current_world,cost_value=1)
+                    exepected_reward_human_by_robot += dist_modele[current_world][previous_State][goal][action]*r[1]
+                    #exepected_reward_human_by_robot += agent_2.expected_reward_over_goal(s=previous_State, w=current_world, belief_state=approx_belief, p_action=dist_modele, a=action)
+               
+                print("Action taken by Agent 2:", action_robot, "Robot reward:", exepected_reward_human_by_robot)
+
+                # Track occurrences of GoalState.take1 and GoalState.take2
+                if action_robot == ActionsAgent2.take_key1:
+                    action_counts[ActionsAgent2.take_key1].append(count)
+                elif action_robot == ActionsAgent2.take_key2:
+                    action_counts[ActionsAgent2.take_key2].append(count)
+
+                current_world = self.env.get_world_state()
+                action_human = ActionsReduced(self.generate_action(state=current_agent_pose, worldState=current_world, goal=goal, dist=dist_reel))
+                
+                terminated, reward_human = self.step(action_human)
+                if terminated:
+                    terminated_count += 1
+                print("Action taken by Human:", action_human,'with probability:', dist_modele[current_world][previous_State][goal][action_human],  ' Human reward:', reward_human)
+
+                current_agent_pose = (self.env.agent_pos[0], self.env.agent_pos[1])
+                #human_robot_cumulative_reward += reward_robot + reward_human
+                human_robot_cumulative_reward += exepected_reward_human_by_robot + reward_robot
+                gt_rewards.append(reward_robot + reward_human)
+                rewards.append(exepected_reward_human_by_robot + reward_robot)
+
+                print(f"Current Agent Pose: {current_agent_pose}")
+                print(f"Cumulative Rewards (Human + Robot): {human_robot_cumulative_reward}")
+                print("-------------------------------------------------------------")
+
+                count += 1                
+
+                # Collect rewards
+                collected_reward_vector_human_robot.append(human_robot_cumulative_reward)
+
+            # Enregistrer la meilleure récompense de cette simulation
+            best_rewards.append(rewards)
+            discounted_gt_rewards.append(self.compute_discounted_rewards(rewards=gt_rewards))
+            discounted_rewards.append(self.compute_discounted_rewards(rewards=rewards))
+            # Pad rewards if simulation ends early
+            while len(collected_reward_vector_human_robot) < max_steps:
+                collected_reward_vector_human_robot.append(human_robot_cumulative_reward)
+
+            all_rewards_human_robot.append(collected_reward_vector_human_robot)
+
+        # Convert rewards to numpy array
+        all_rewards_human_robot = np.array(all_rewards_human_robot, dtype=np.float64)
+
+        # Calculate mean and standard deviation
+        mean_rewards = np.nanmean(all_rewards_human_robot, axis=0)
+        std_rewards = np.nanstd(all_rewards_human_robot, axis=0)
+        
+        mean_action_counts = {
+            ActionsAgent2.take_key1: np.mean(action_counts[ActionsAgent2.take_key1]) if action_counts[ActionsAgent2.take_key1] else 0,
+            ActionsAgent2.take_key2: np.mean(action_counts[ActionsAgent2.take_key2]) if action_counts[ActionsAgent2.take_key2] else 0
+        }
+
+        #mean_cumulative_reward = np.mean(discounted_gt_rewards)
+        #std_cumulative_reward = np.std(discounted_gt_rewards)
+        mean_discounted_reward = np.mean(discounted_rewards)
+        std_discounted_reward = np.std(discounted_rewards)
+        
+        # Trier et prendre les deux meilleures récompenses cumulatives
+        #best_human_robot_cumulative_rewards = all_rewards_human_robot[30]
+        best_human_robot_cumulative_rewards = all_rewards_human_robot
         print("Mean Action Counts:")
         print(f"Mean of expected discounted cumulative reward: {mean_discounted_reward}")
         print(f"STD of expected discounted cumulative reward: {std_discounted_reward}")
@@ -285,20 +477,23 @@ class MainAgent:
         Returns:
             np.array: Discounted rewards.
         """
-        discounted_rewards = np.zeros_like(rewards, dtype=float)
-        cumulative_reward = 0
-
-        for t in reversed(range(len(rewards))):
-            cumulative_reward = rewards[t] + self.gamma * cumulative_reward
-            discounted_rewards[t] = cumulative_reward
-        
-        return cumulative_reward
+        total_reward = 0.0
+        current_discount = 1.0
+        for reward in rewards:
+            total_reward += reward * current_discount
+            current_discount *= self.gamma
+        return total_reward
     
     def compute_dist(self, eta, g):
-        print(f"Computing dist for eta={eta}")
-        self.env.set_env_to_goal(g)
-        J, Q = self.value_iteration_multiple_goal()
-        dist = self.boltzmann_policy_multiple_goal(Q, eta=eta)
+        if self.env.multiple_goal:
+            print(f"Computing dist for eta={eta}")
+            self.env.set_env_to_goal(g)
+            J, Q = self.value_iteration_multiple_goal()
+            dist = self.boltzmann_policy_multiple_goal(Q, eta=eta)
+        else:
+            print(f"Computing dist for eta={eta}")
+            J, Q = self.value_iteration()
+            dist = self.boltzmann_policy(Q, eta=eta)
         return dist
     
     def start(self, agent: AssistiveAgent):
@@ -372,42 +567,42 @@ class MainAgent:
         '''
         
         '''
-        # N_values = [5, 15, 30]
-        # taill_grille = ['12x12', '16x16', '32x32']
-        # computation_times = [135.73, 414, 855.4]
-        # computation_times_state_humain = [414, 981.11, 8977]
-        # computation_time_sarsop_state_human = [20399, 244483+23703, z+z1] # [20399, 374757]
+        N_values = [5, 15, 30]
+        taill_grille = ['12x12', '16x16', '32x32']
+        computation_times = [135.73, 414, 855.4]
+        computation_times_state_humain = [414, 981.11, 8977]
+        #computation_time_sarsop_state_human = [20399, 244483+23703, z+z1] # [20399, 374757]
 
-        # fig, ax = plt.subplots(figsize=(8, 6))
-        # fig.patch.set_facecolor('white')
-        # ax.set_facecolor('white')
+        fig, ax = plt.subplots(figsize=(8, 6))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
 
-        # ax.plot(taill_grille, computation_times_state_humain, marker='o', linestyle='-', color='b')
-        # ax.set_title("Computation time of policy")
-        # ax.set_xlabel("Grid Word size")
-        # ax.set_ylabel("Time (seconds)")
-        # ax.grid(axis='y', linestyle='--', alpha=0.7, color='gray')
+        ax.plot(N_values, computation_times, marker='o', linestyle='-', color='b')
+        ax.set_title("Temps de calcul de la politique")
+        ax.set_xlabel("Niveau de discrétisation")
+        ax.set_ylabel("Temps (secondes)")
+        ax.grid(axis='y', linestyle='--', alpha=0.7, color='gray')
 
-        # for spine in ax.spines.values():
-        #     spine.set_edgecolor('black')
-        #     spine.set_linewidth(1.2)
+        for spine in ax.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(1.2)
 
-        # ax.spines['top'].set_visible(False)
-        # ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
-        # # Set exact y-axis ticks
-        # ax.set_yticks(computation_times_state_humain)
-        # ax.set_yticklabels([f'{time:.2f}' for time in computation_times])
+        # Set exact y-axis ticks
+        ax.set_yticks(computation_times)
+        ax.set_yticklabels([f'{time:.2f}' for time in computation_times])
 
-        # plt.tight_layout()
-        # plt.show()
+        plt.tight_layout()
+        plt.show()
         '''
         
         self.reset(self.seed)
         #self.env.place_agent(top=(1,5))
         current_agent_pose = (self.env.agent_pos[0],  self.env.agent_pos[1])
         g = GoalState.green_goal
-        learned_eta = 1.98
+        learned_eta =0.12
         if self.env.multiple_goal:
             self.env.set_env_to_goal(g)
             print('@@@@@@@@@@@@@@@@@@ Human policy Level 0 calculus @@@@@@@@@@@@@@@@@@')
@@ -441,42 +636,42 @@ class MainAgent:
                 print(end)
                 policy_agent2 = agent_2.deduce_policy_multiple_goal(J2_temp, dist_modele)
             
-            '''
-            print('@@@@@@@@@@@@@@@@@@ Human policy ADAPTATIVE Level 1 calculus @@@@@@@@@@@@@@@@@@')
-
-            J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent_2, p_action=dist)
-            dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent_2, eta=9)
             
-            print('@@@@@@@@@@@@@@@@@@ Robot policy Level 1 calculus @@@@@@@@@@@@@@@@@@')
+            # print('@@@@@@@@@@@@@@@@@@ Human policy ADAPTATIVE Level 1 calculus @@@@@@@@@@@@@@@@@@')
 
-            J_iterative_1, Q_iterative_1 = agent_2.value_iteration_baseline_iterative_game(dist_iterative)
-            policy_agent2_niveau_1 = agent_2.deduce_policy_iterative_game(J=J_iterative_1, p_action=dist_iterative)
-            '''
+            # J_iterative, Q_iterative = self.value_iteration_iterative_game(agent=agent_2, p_action=dist_modele)
+            # dist_iterative = self.boltzmann_policy_iterative_game(Q=Q_iterative, agent=agent_2, eta=learned_eta)
+            
+            # print('@@@@@@@@@@@@@@@@@@ Robot policy Level 1 calculus @@@@@@@@@@@@@@@@@@')
+
+            # J_iterative_1, Q_iterative_1 = agent_2.value_iteration_baseline_iterative_game(dist_iterative)
+            # policy_agent2_niveau_1 = agent_2.deduce_policy_iterative_game(J=J_iterative_1, p_action=dist_iterative)
+            
             
             if VIEW_DICTIONNARY:
                 converted_dict = convert_keys_to_str(dist_modele)
                 converted_Q = convert_keys_to_str(Q2_temp)
                 converted_policy2 = convert_keys_to_str(policy_agent2)
-                #converted_iterative_q = convert_keys_to_str(Q_iterative)
-                #converted_dist_iterative = convert_keys_to_str(dist_iterative)
-                #converted_iterative_q_2 = convert_keys_to_str(Q_iterative_1)
-                #converted_iterative_policy_agent2_niveau_1 = convert_keys_to_str(policy_agent2_niveau_1)
+                converted_iterative_q = convert_keys_to_str(Q_iterative)
+                converted_dist_iterative = convert_keys_to_str(dist_iterative)
+                converted_iterative_q_2 = convert_keys_to_str(Q_iterative_1)
+                converted_iterative_policy_agent2_niveau_1 = convert_keys_to_str(policy_agent2_niveau_1)
                 # Application setup
                 app = QApplication(sys.argv)
-                viewer = DynamicDualDictViewer(converted_dict, converted_policy2, dict1_name='Poliy Agent H niveau 0', dict2_name='PoliCY Agent 2 niveau 0')
+                viewer = DynamicDualDictViewer(converted_iterative_policy_agent2_niveau_1, converted_iterative_q_2, dict1_name='R policy niveau 1', dict2_name='Robot Q niveau 1')
                 
                 sys.exit(app.exec_())
         else:
             J, Q = self.value_iteration()
-            dist = self.boltzmann_policy(Q, eta=5)
+            dist_modele = self.boltzmann_policy(Q, eta=learned_eta)
         
         epsilon = 1e-5
 
-        robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist_modele, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
+        #robotproblem = Robotproblem(word1=ALL_POSSIBLE_WOLRD[3][0], world2=ALL_POSSIBLE_WOLRD[3][1], pose=current_agent_pose, goal=g, env=env, dim=(16,16), human_probability=dist_modele, epsilon=epsilon, initial_prob=PROB_SIM_GREEN_GOAL)
 
         count = 0
         # Parameters for the Monte Carlo simulation
-        NUM_SIMULATIONS = 1000  # Number of simulations to run
+        NUM_SIMULATIONS = 10  # Number of simulations to run
         MAX_STEPS = 300  # Maximum number of steps per simulation
 
         # Main code to iterate over discrete_num values and plot results
@@ -485,8 +680,8 @@ class MainAgent:
         # learned beta for k = 5 is 0.79
         # learned beta for k = 5 is 0.983
         
-        etas = [2, 0.5, 2]
-        discrete_nums = [5, 15, 30]
+        etas = [0.1, 0.8, 2]
+        discrete_nums = [30, 15, 30]
         colors = ["orange", "blue", "green"]
         MAX_STEPS_ETA = [500, 500, 500]
         steps = np.arange(1, MAX_STEPS + 1)
@@ -498,34 +693,60 @@ class MainAgent:
             plt.figure(figsize=(12, 8))
 
             for i, discrete_num in enumerate(discrete_nums):
-                mean_rewards, std_rewards, mean_action_counts, best_reward, mean_d, std_d, all_rewards, success_count = self.run_simulation(agent_2, discrete_num, dist_reel=dist, dist_modele=dist_modele, max_steps=MAX_STEPS_ETA[i], num_simulations=NUM_SIMULATIONS)
-                steps = np.arange(1, MAX_STEPS_ETA[i] + 1)
-                with open(f"Results_eta({eta})_discretize({discrete_num}_trueEta({learned_eta}_BELIEF{PROB_SIM_GREEN_GOAL}_green))", 'w') as f:
-                    # Write header with parameters
-                    f.write(f"Parameters:\n")
-                    f.write(f"Number of simulation: {NUM_SIMULATIONS}\n")
-                    f.write(f"Discount factor (gamma): {self.gamma}\n")
-                    f.write(f"Probability of real human behavior (eta) = {eta} : \n")
-                    #f.write(str(dist))
-                    f.write(f"\n")
-                    f.write(f"Probability of robot human behavior (eta) = {learned_eta} : \n")
-                    #f.write(str(dist_modele))
-                    f.write(f"\n")
-                    f.write(f"Some trajectory : \n")
-                    f.write(str(all_rewards[0:750:250]))
-                    f.write(f"\n")
-                    f.write(f"Success count % : \n")
-                    f.write(str((success_count/NUM_SIMULATIONS)*100))
-                    f.write(f"\n")
-                    # Write column headers for trial data
-                    f.write(f"Mean of expected discounted cumulative reward optimized by the robot : {mean_d}\n")
-                    f.write(f"Std of Expected discounted cumulative reward optimized by the robot : {std_d}\n")
+                if self.env.multiple_goal:
+                    mean_rewards, std_rewards, mean_action_counts, best_reward, mean_d, std_d, all_rewards, success_count = self.run_simulation(agent_2, discrete_num, dist_reel=dist, dist_modele=dist_modele, max_steps=MAX_STEPS_ETA[i], num_simulations=NUM_SIMULATIONS, iterative=True, eta_iterative=learned_eta, eta_reel=eta)
+                    # Write results to a file
+                    steps = np.arange(1, MAX_STEPS_ETA[i] + 1)
+                    with open(f"Results_eta({eta})_discretize({discrete_num}_trueEta({learned_eta}_BELIEF{PROB_SIM_GREEN_GOAL}_red_iterativegame", 'w') as f:
+                        # Write header with parameters
+                        f.write(f"Parameters:\n")
+                        f.write(f"Number of simulation: {NUM_SIMULATIONS}\n")
+                        f.write(f"Discount factor (gamma): {self.gamma}\n")
+                        f.write(f"Probability of real human behavior (eta) = {eta} : \n")
+                        #f.write(str(dist))
+                        f.write(f"\n")
+                        f.write(f"Probability of robot human behavior (eta) = {learned_eta} : \n")
+                        #f.write(str(dist_modele))
+                        f.write(f"\n")
+                        f.write(f"Some trajectory : \n")
+                        f.write(str(all_rewards[0:750:250]))
+                        f.write(f"\n")
+                        f.write(f"Success count % : \n")
+                        f.write(str((success_count/NUM_SIMULATIONS)*100))
+                        f.write(f"\n")
+                        # Write column headers for trial data
+                        f.write(f"Mean of expected discounted cumulative reward optimized by the robot : {mean_d}\n")
+                        f.write(f"Std of Expected discounted cumulative reward optimized by the robot : {std_d}\n")
+                else:
+                    mean_rewards, std_rewards, mean_action_counts, best_reward, mean_d, std_d, all_rewards, success_count = self.run_simulation_single(agent_2, dist_reel=dist, dist_modele=dist_modele, max_steps=MAX_STEPS_ETA[i], num_simulations=NUM_SIMULATIONS, eta_reel=eta)
+                    # Write results to a file
+                    steps = np.arange(1, MAX_STEPS_ETA[i] + 1)
+                    with open(f"Results_eta({eta})_trueEta({learned_eta}_single_goal", 'w') as f:
+                        # Write header with parameters
+                        f.write(f"Parameters:\n")
+                        f.write(f"Number of simulation: {NUM_SIMULATIONS}\n")
+                        f.write(f"Discount factor (gamma): {self.gamma}\n")
+                        f.write(f"Probability of real human behavior (eta) = {eta} : \n")
+                        #f.write(str(dist))
+                        f.write(f"\n")
+                        f.write(f"Probability of robot human behavior (eta) = {learned_eta} : \n")
+                        #f.write(str(dist_modele))
+                        f.write(f"\n")
+                        f.write(f"Some trajectory : \n")
+                        f.write(str(all_rewards[0:1:2]))
+                        f.write(f"\n")
+                        f.write(f"Success count % : \n")
+                        f.write(str((success_count/NUM_SIMULATIONS)*100))
+                        f.write(f"\n")
+                        # Write column headers for trial data
+                        f.write(f"Mean of expected discounted cumulative reward optimized by the robot : {mean_d}\n")
+                        f.write(f"Std of Expected discounted cumulative reward optimized by the robot : {std_d}\n")
                     # f.write(f"Mean of Ground truth discounted cumulative reward optimized by the robot : {mean_c}\n")
                     # f.write(f"STD of Ground truth discounted cumulative reward optimized by the robot : {std_c}\n")
                     
                     
-                plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
-                plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
+                # plt.plot(steps, mean_rewards, label=f"discrete_num={discrete_num}", color=colors[i])
+                # plt.fill_between(steps, mean_rewards - std_rewards, mean_rewards + std_rewards, color=colors[i], alpha=0.2)
                 
                 # plt.figure(figsize=(10, 6))
                 # plt.bar(mean_action_counts.keys(), mean_action_counts.values(), color=['blue', 'orange'], alpha=0.7)
@@ -537,16 +758,16 @@ class MainAgent:
                 # plt.savefig("mean_action_histogram.png")
                 # plt.show()
 
-            plt.yticks([-50, -20, -10, 0, 50, 100, 150, 200, 250, 300])
-            plt.title(f"Average Human-Robot Reward (eta={eta}) ")
-            plt.xlabel("Steps")
-            plt.ylabel("Average Reward")
-            plt.legend()
-            plt.grid(True)
+            # plt.yticks([-50, -20, -10, 0, 50, 100, 150, 200, 250, 300])
+            # plt.title(f"Average Human-Robot Reward (eta={eta}) ")
+            # plt.xlabel("Steps")
+            # plt.ylabel("Average Reward")
+            # plt.legend()
+            # plt.grid(True)
 
-            # Save the plot to a file or display it
-            plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
-            plt.show()  # Show the plot
+            # # Save the plot to a file or display it
+            # plt.savefig(f"reward_plot_eta_{eta}.png")  # Save to file for later use
+            # plt.show()  # Show the plot
             
             
         # step.append(count)
@@ -620,21 +841,21 @@ class MainAgent:
         # print(agent_2.discretize_belief)
         # print(agent_2.approx_prob_to_belief(0.11))
         
-        solve(
-            robotproblem,
-            max_depth=12000,
-            discount_factor=0.99,
-            planning_time=5.0,
-            exploration_const=50000,
-            visualize=True,
-            max_time=120,
-            max_steps=500,
-            solver_type='sarsop',
-            humanproblem=False,
-            human_intent=g,
-            dist=dist,
-            computed_policy=policy_agent2,
-            agent2=agent_2)
+        # solve(
+        #     robotproblem,
+        #     max_depth=12000,
+        #     discount_factor=0.99,
+        #     planning_time=5.0,
+        #     exploration_const=50000,
+        #     visualize=True,
+        #     max_time=120,
+        #     max_steps=500,
+        #     solver_type='sarsop',
+        #     humanproblem=False,
+        #     human_intent=g,
+        #     dist=dist,
+        #     computed_policy=policy_agent2,
+        #     agent2=agent_2)
         
 
         '''
@@ -726,10 +947,10 @@ class MainAgent:
         # time_history = {45:0, 45:0, 5:0}
         # Number of
         # Monte Carlo runs
-        num_runs = 20
+        num_runs = 100
 
         # N values to iterate over
-        N_values = [5, 45]
+        N_values = [1, 5, 45]
 
         # Storage for final statistics
         statistics = {}
@@ -791,7 +1012,7 @@ class MainAgent:
 
                 # Estimate parameters using the BoltzmanEstimator
                 estimator = BoltzmanEstimator(data=collect_data, q_function=Q, boltzman_policy=dist, initial_beta=eta)
-                temp_evolution = estimator.gradient_iteration_hidden_goal(datas=collect_data, learning_rate=1e-4)
+                temp_evolution = estimator.gradient_iteration_hidden_goal(datas=collect_data, learning_rate=1e-3)
                 duratin_Taken.append(temp_evolution[1])
                 all_estimate_evolutions.append(temp_evolution[0])  # Store evolution of estimates
                 
@@ -851,8 +1072,8 @@ class MainAgent:
         #pose, reward = self.env.check_move(action, self.env.get_world_state())
         reward = self.env.get_reward_1(self.env.agent_pos[0], self.env.agent_pos[1], action)
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!! ")
-        print(self.env.goal_pose)
-        print(self.env.goal_)
+        # print(self.env.goal_pose)
+        # print(self.env.goal_)
         terminated = True if (self.env.agent_pos[0],  self.env.agent_pos[1]) == (self.env.goal_pose[0][0], self.env.goal_pose[0][1]) else False
         print(terminated)
         if terminated:
@@ -964,6 +1185,8 @@ class MainAgent:
     
     def world_dynamic_update(self, action, current_world):
         world_prime = None
+        if current_world == None:
+            current_world = self.env.get_world_state()
         if not self.env.multiple_goal:
             if action == ActionsAgent2.take_key and current_world == WorldSate.closed_door :
                 world_prime = WorldSate.open_door
@@ -973,9 +1196,11 @@ class MainAgent:
                 world_prime = current_world
         else:
             if action == ActionsAgent2.take_key1 and current_world[0] == WorldSate.closed_door1:
-                world_prime = (WorldSate.open_door1, current_world[1])
+                #world_prime = (WorldSate.open_door1, current_world[1])
+                world_prime = (WorldSate.open_door1, WorldSate.closed_door2)
             elif action == ActionsAgent2.take_key2 and current_world[1] == WorldSate.closed_door2:
-                world_prime = (current_world[0], WorldSate.open_door2)
+                #world_prime = (current_world[0], WorldSate.open_door2)
+                world_prime = (WorldSate.closed_door1, WorldSate.open_door2)
             elif action == ActionsAgent2.nothing:
                 world_prime = current_world
             else:
@@ -1012,17 +1237,22 @@ class MainAgent:
         next_state_reward = []
         optimal_action2 = agent.policy(belief, w, s)
         #print(optimal_action2)
+        save_targ = self.env.target_door
         self.env.check_move(action=optimal_action2, w=w)
+        world_prime = self.world_dynamic_update(optimal_action2, w)
         transitions = self.env.get_transition_probs( action=a, cost_value=1)
         for (prob, r, state_prime) in transitions:    
-            world_prime = self.world_dynamic_update(optimal_action2, w)
+            
             next_belief = self.belief_state_discretize(belief=belief, dist_boltzmann=p_action, w=world_prime,s=state_prime, previous_state=s)
             next_belief = agent.approx_prob_to_belief(next_belief)
             r = self.env.check_move(action=a,w=world_prime,cost_value=1)
             reward = prob*(r[1] + self.gamma*J[g][next_belief][world_prime][state_prime])
             next_state_reward.append(reward)
         #print(next_state_reward)
-        self.env.check_move(action=optimal_action2, w=w)
+        #self.env.check_move(action=optimal_action2, w=w)
+        self.env.toggle_all_target_door()
+        self.env.open_door_manually(w)
+        self.env.target_door = save_targ
         return next_state_reward
     
     def initialize_variation(self):
@@ -1081,13 +1311,10 @@ class MainAgent:
         for i in range(len(ALL_POSSIBLE_GOAL)):
             for belief in agent.discretize_belief:
                 for w in ALL_POSSIBLE_WOLRD:
-                    #print(variation[ALL_POSSIBLE_GOAL[i]][belief][w])
-                    if variation[ALL_POSSIBLE_GOAL[i]][belief][w] <= self.threshold:
-                        breaking_flag = True * breaking_flag
-                    else:
-                        
-                        breaking_flag = False * breaking_flag
-        return breaking_flag
+                    if variation[ALL_POSSIBLE_GOAL[i]][belief][w] > self.threshold:
+                        #print(variation[belief][w])
+                        return False  # Variation exceeds threshold, immediately return False
+        return True  # All variations are within threshold, return True
 
     
     def value_iteration(self, g=GoalState.green_goal):
@@ -1103,7 +1330,7 @@ class MainAgent:
                     # open the door in Value iteration
                     temp = J[g][w][s]
                     #do things to set goals
-                    for a in self.env.get_possible_move(s):
+                    for a in ALL_POSSIBLE_ACTIONS:
                         next_state_reward = self.bellman_equation(J, g, w, a, s) 
                         Q[g][w][s][a]=((np.sum(next_state_reward)))
                                               
@@ -1121,12 +1348,14 @@ class MainAgent:
         self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q()
         number_iter = 0
+        self.env.toggle_all_target_door()
         
         while True:
             big_change = self.initialize_variation()
             for g in ALL_POSSIBLE_GOAL:
                 self.env.set_env_to_goal(g)
                 for w in ALL_POSSIBLE_WOLRD:
+                    #self.env.toggle_all_target_door()
                     self.env.open_door_manually(w)
                     #if self.status[w][g] is False: # we only update the value iteration for value function that didn't converge yet
                     for s in self.env.get_states_non_terminated():
@@ -1153,6 +1382,7 @@ class MainAgent:
         # set by default
         self.env.set_env_to_goal(GoalState.green_goal)
         J, Q, states, big_change = self.initializeJ_Q_iterative_game(agent=agent)
+        self.env.toggle_all_target_door()
         number_iter = 0
         temp = {}
         while True:
@@ -1162,25 +1392,28 @@ class MainAgent:
                 self.env.set_env_to_goal(g)
                 for belief in agent.discretize_belief: 
                     for w in ALL_POSSIBLE_WOLRD:
+                        #self.env.toggle_all_target_door()
+                        self.env.toggle_all_target_door()
                         self.env.open_door_manually(w)
                         #if self.status[w][g] is False: # we only update the value iteration for value function that didn't converge yet
                         for s in self.env.get_states_non_terminated():
                             self.env.set_state(s)
                             # open the door in Value iteration
-                            temp = J[g][belief][w][s]
+                            
                             #do things to set goals
+                            next_r = []
                             for a in ALL_POSSIBLE_ACTIONS:
-                                next_state_reward = self.bellman_equation_iterative_game(agent=agent, p_action=p_action, J=J, g=g, belief=belief, w=w, a=a, s=s) 
+                                rewards = self.bellman_equation_iterative_game(agent=agent, p_action=p_action, J=J, g=g, belief=belief, w=w, a=a, s=s) 
                                 #print(next_state_reward)
-                                Q[g][belief][w][s][a]=((np.sum(next_state_reward)))
-                        
+                                Q[g][belief][w][s][a]=((np.sum(rewards)))
+                            temp = J[g][belief][w][s]
                             J[g][belief][w][s] = max(Q[g][belief][w][s].values())
                 
                             big_change[g][belief][w] = max(big_change[g][belief][w], np.abs(temp-J[g][belief][w][s]))
                         #close the door
-                    self.env.open_door_manually(w)
+                        self.env.open_door_manually(w)
             value_iteration_elapsed_time = initial_time - time.time()
-            print('Elpased time for value iteration with multiple goal:')
+            print('Elpased time for value iteration OF humain iterative with multiple goal:')
             print(value_iteration_elapsed_time)
             print(number_iter)
             if self.variation_superiorTothreshold_iterative_game(agent=agent, variation=big_change):
@@ -1299,13 +1532,13 @@ class MainAgent:
                 for a in ALL_POSSIBLE_ACTIONS: # still debugging this part but works fine
                     dist[w][s][g][a] = 0
                 #for a in ALL_POSSIBLE_ACTIONS :
-                for a in self.env.get_possible_move(s):
+                for a in ALL_POSSIBLE_ACTIONS:
                     # use max normalization method where we use exp(array - max(array))
                     # instead of exp(arr) which can cause infinite value
                     # we can improve this part of the code
                     dist[w][s][g][a] = (np.exp(eta*(Q[g][w][s][a] - max(Q[g][w][s].values()))))
                     total_prob[w][s][g] += dist[w][s][g][a]
-                for a in self.env.get_possible_move(s):
+                for a in ALL_POSSIBLE_ACTIONS:
                     dist[w][s][g][a] = (dist[w][s][g][a])/(total_prob[w][s][g])
             # CLOSE the door in Value iteration
             self.env.open_door_manually(w)
@@ -1315,12 +1548,14 @@ class MainAgent:
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
         total_prob = {}
+        self.env.toggle_all_target_door()
         
         states = self.env.get_all_states()
         for i in range(len(ALL_POSSIBLE_GOAL)):
             dist[ALL_POSSIBLE_GOAL[i]] = {}
             total_prob[ALL_POSSIBLE_GOAL[i]] = {}
             for w in ALL_POSSIBLE_WOLRD:
+                self.env.toggle_all_target_door()
                 self.env.open_door_manually(w)
                 dist[ALL_POSSIBLE_GOAL[i]][w] = {}
                 total_prob[ALL_POSSIBLE_GOAL[i]][w] = {}
@@ -1347,6 +1582,7 @@ class MainAgent:
         #  IMPROVE INITIALIZATION OF DIC 
         dist = {}
         total_prob = {}
+        self.env.toggle_all_target_door()
         
         states = self.env.get_all_states()
         for i in range(len(ALL_POSSIBLE_GOAL)):
@@ -1356,6 +1592,7 @@ class MainAgent:
                 dist[ALL_POSSIBLE_GOAL[i]][belief] = {}
                 total_prob[ALL_POSSIBLE_GOAL[i]][belief] = {}
                 for w in ALL_POSSIBLE_WOLRD:
+                    self.env.toggle_all_target_door()
                     self.env.open_door_manually(w)
                     dist[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
                     total_prob[ALL_POSSIBLE_GOAL[i]][belief][w] = {}
@@ -1372,15 +1609,20 @@ class MainAgent:
                             dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (np.exp(eta*(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] - max(Q[ALL_POSSIBLE_GOAL[i]][belief][w][s].values()))))
                             total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s] += dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a]
                         for a in ALL_POSSIBLE_ACTIONS:
-                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = (dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a])/(total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s])
+                            dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a] = dist[ALL_POSSIBLE_GOAL[i]][belief][w][s][a]/total_prob[ALL_POSSIBLE_GOAL[i]][belief][w][s]
                     # CLOSE the door in Value iteration
                     self.env.open_door_manually(w)
         return dist
     
     def generate_action(self, state, worldState, goal, dist):
-        possible_action = [a for a in dist[goal][worldState][state].keys()]
-        prob = [dist[goal][worldState][state][a] for a in dist[goal][worldState][state].keys()]
-        generated_action = np.random.choice(possible_action, p=prob)
+        if self.env.multiple_goal:
+            possible_action = [a for a in dist[goal][worldState][state].keys()]
+            prob = [dist[goal][worldState][state][a] for a in dist[goal][worldState][state].keys()]
+            generated_action = np.random.choice(possible_action, p=prob)
+        else:
+            possible_action = [a for a in dist[worldState][state][goal].keys()]
+            prob = [dist[worldState][state][goal][a] for a in dist[worldState][state][goal].keys()]
+            generated_action = np.random.choice(possible_action, p=prob)
         return generated_action
 
     def generate_action_iterative_game(self, belief, state, worldState, goal, dist):
@@ -1464,7 +1706,7 @@ class BoltzmanEstimator:
             self.optimized_beta = beta
             print(f"Iteration {iteration}: beta = {beta}, gradient = {gradient}")
 
-    def gradient_iteration_hidden_goal(self, datas, n_iterations=1e6, learning_rate=1e-3, decreasing_step=0.90, epsilon=1e-12):
+    def gradient_iteration_hidden_goal(self, datas, n_iterations=1e6, learning_rate=1e-3, decreasing_step=1, epsilon=1e-9):
         gradient = 0
         iteration = 0
         beta_old = 1
@@ -1775,27 +2017,29 @@ class BoltzmanEstimator:
         fig, ax = plt.subplots(figsize=(8, 6))
         fig.patch.set_facecolor('white')
         ax.set_facecolor('white')
-        finish = [2000, 2000]
+        finish = [2000, 500, 50]
         if gradient:
             print("Plotting Gradient Ascent Results...")
 
             for i, n_t in enumerate(self.N_history_hidden.keys()):
-                # if i == 1:
-                best_estimate_evolution = self.N_history_hidden[n_t]
-                variance_evolution = self.statistics[n_t]  # Ensure statistics are computed
+                if i == 1:
+                    best_estimate_evolution = self.N_history_hidden[n_t]
+                    variance_evolution = self.statistics[n_t]  # Ensure statistics are computed
 
-                lower_bound = best_estimate_evolution - np.sqrt(variance_evolution)
-                upper_bound = best_estimate_evolution + np.sqrt(variance_evolution)
+                    lower_bound = best_estimate_evolution - np.sqrt(variance_evolution)
+                    upper_bound = best_estimate_evolution + np.sqrt(variance_evolution)
 
-                # Plot gradient ascent evolution
-                ax.plot(range(len(best_estimate_evolution[:finish[i]])), best_estimate_evolution[:finish[i]],
-                        color=colors[i % len(colors)], linestyle='-', linewidth=2,
-                        label=f'Gradient ascent avec objectif inconnu K = {n_t}')
+                    # Plot gradient ascent evolution
+                    ax.plot(range(len(best_estimate_evolution[:finish[i]])), best_estimate_evolution[:finish[i]],
+                            color=colors[i % len(colors)], linestyle='-', linewidth=2,
+                            label=f'Gradient ascent avec objectif inconnu K = {n_t}')
 
-                # Shaded region for variance
-                ax.fill_between(range(len(best_estimate_evolution[:finish[i]])), lower_bound[:finish[i]], upper_bound[:finish[i]],
-                                color=colors[i % len(colors)], alpha=0.2,
-                                label=f'Variance K = {n_t}')
+                    # Shaded region for variance
+                    ax.fill_between(range(len(best_estimate_evolution[:finish[i]])), lower_bound[:finish[i]], upper_bound[:finish[i]],
+                                    color=colors[i % len(colors)], alpha=0.2,
+                                    label=f'Variance K = {n_t}')
+                else: 
+                    break
                 #plt.axhline(y=best_estimate_evolution[-1], color=colors[i % len(colors)], linestyle='--', label='')
                 
 
@@ -1831,7 +2075,7 @@ class BoltzmanEstimator:
         ax.spines['right'].set_visible(False)
 
         ax.set_xlabel("Itération", fontsize=12)
-        ax.set_ylabel("Valeur de Beta", fontsize=12)
+        ax.set_ylabel("Estimé de Beta", fontsize=12)
         plt.axhline(y=groundtruth, color='black', linestyle='--', label='Vraie valeur')
 
 
@@ -2192,6 +2436,8 @@ if __name__ == "__main__":
         agent_pov=args.agent_view,
         agent_view_size=args.agent_view_size,
         screen_size=args.screen_size,
+        agent_start_pos=START_POSE, 
+        agent_start_dir=DIR_POSE
     )
     
     #env = EmptyReducedEnv(render_mode="human", size =16)
